@@ -4,18 +4,33 @@ import { useState } from "react";
 import {
   Plus,
   Search,
-  Filter,
   ArrowUpRight,
   ArrowDownRight,
   Edit2,
   Trash2,
   X,
+  Tag,
+  Upload,
+  FileText,
+  CheckCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Mock data
+const defaultCategories = [
+  { name: "Food & Dining", color: "#ef4444", type: "expense" },
+  { name: "Transportation", color: "#3b82f6", type: "expense" },
+  { name: "Bills & Utilities", color: "#f59e0b", type: "expense" },
+  { name: "Entertainment", color: "#8b5cf6", type: "expense" },
+  { name: "Shopping", color: "#ec4899", type: "expense" },
+  { name: "Health", color: "#10b981", type: "expense" },
+  { name: "Education", color: "#6366f1", type: "expense" },
+  { name: "Salary", color: "#22c55e", type: "income" },
+  { name: "Freelance", color: "#14b8a6", type: "income" },
+  { name: "Investments", color: "#0ea5e9", type: "income" },
+];
+
 const mockTransactions = [
   { id: 1, description: "Grocery Store", amount: 85.50, category: "Food & Dining", date: "2024-01-15", type: "expense", paymentMethod: "Credit Card" },
   { id: 2, description: "Monthly Salary", amount: 5200.00, category: "Salary", date: "2024-01-15", type: "income", paymentMethod: "Bank Transfer" },
@@ -29,29 +44,19 @@ const mockTransactions = [
   { id: 10, description: "Investment Return", amount: 150.00, category: "Investments", date: "2024-01-10", type: "income", paymentMethod: "Bank Transfer" },
 ];
 
-const categories = [
-  "All",
-  "Food & Dining",
-  "Transportation",
-  "Bills & Utilities",
-  "Entertainment",
-  "Shopping",
-  "Health",
-  "Education",
-  "Salary",
-  "Freelance",
-  "Investments",
-];
-
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState(mockTransactions);
+  const [categories, setCategories] = useState(defaultCategories);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedType, setSelectedType] = useState<"all" | "income" | "expense">("all");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ message: string; count: number; errors?: string[] } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<typeof mockTransactions[0] | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
     description: "",
     amount: "",
@@ -60,6 +65,12 @@ export default function TransactionsPage() {
     date: new Date().toISOString().split("T")[0],
     paymentMethod: "Credit Card",
     notes: "",
+  });
+
+  const [newCategory, setNewCategory] = useState({
+    name: "",
+    color: "#6366f1",
+    type: "expense" as "income" | "expense",
   });
 
   const filteredTransactions = transactions.filter((t) => {
@@ -75,6 +86,86 @@ export default function TransactionsPage() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  const getCategoryColor = (categoryName: string) => {
+    const cat = categories.find((c) => c.name === categoryName);
+    return cat?.color || "#6b7280";
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategory.name.trim()) return;
+    
+    const categoryExists = categories.some(
+      (c) => c.name.toLowerCase() === newCategory.name.trim().toLowerCase()
+    );
+    
+    if (categoryExists) {
+      alert("Category already exists!");
+      return;
+    }
+
+    setCategories([
+      ...categories,
+      {
+        name: newCategory.name.trim(),
+        color: newCategory.color,
+        type: newCategory.type,
+      },
+    ]);
+    
+    setNewCategory({ name: "", color: "#6366f1", type: "expense" });
+    setShowCategoryModal(false);
+  };
+
+  const handleDeleteCategory = (categoryName: string) => {
+    const isUsed = transactions.some((t) => t.category === categoryName);
+    if (isUsed) {
+      alert("Cannot delete category that is used in transactions!");
+      return;
+    }
+    setCategories(categories.filter((c) => c.name !== categoryName));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setUploadResult({
+          message: data.message,
+          count: data.count,
+          errors: data.errors,
+        });
+      } else {
+        setUploadResult({
+          message: data.error || "Upload failed",
+          count: 0,
+          errors: data.details,
+        });
+      }
+    } catch {
+      setUploadResult({
+        message: "An error occurred during upload",
+        count: 0,
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleAddTransaction = () => {
@@ -149,10 +240,20 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold">Transactions</h1>
           <p className="text-muted-foreground">Manage your income and expenses</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Transaction
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowUploadModal(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button variant="outline" onClick={() => setShowCategoryModal(true)}>
+            <Tag className="mr-2 h-4 w-4" />
+            Categories
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Transaction
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -175,8 +276,9 @@ export default function TransactionsPage() {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
               >
+                <option value="All">All Categories</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat.name} value={cat.name}>{cat.name}</option>
                 ))}
               </select>
               <select
@@ -210,9 +312,7 @@ export default function TransactionsPage() {
                   <div className="flex items-center gap-4">
                     <div
                       className={`rounded-full p-2 ${
-                        transaction.type === "income"
-                          ? "bg-success/10"
-                          : "bg-destructive/10"
+                        transaction.type === "income" ? "bg-success/10" : "bg-destructive/10"
                       }`}
                     >
                       {transaction.type === "income" ? (
@@ -223,17 +323,19 @@ export default function TransactionsPage() {
                     </div>
                     <div>
                       <p className="font-medium">{transaction.description}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: getCategoryColor(transaction.category) }}
+                        />
                         {transaction.category} • {transaction.date} • {transaction.paymentMethod}
-                      </p>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <p
                       className={`font-semibold ${
-                        transaction.type === "income"
-                          ? "text-success"
-                          : "text-destructive"
+                        transaction.type === "income" ? "text-success" : "text-destructive"
                       }`}
                     >
                       {transaction.type === "income" ? "+" : "-"}
@@ -282,7 +384,6 @@ export default function TransactionsPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Type Toggle */}
               <div className="flex rounded-lg border border-border">
                 <button
                   onClick={() => setFormData({ ...formData, type: "expense" })}
@@ -329,10 +430,19 @@ export default function TransactionsPage() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
                 >
-                  {categories.filter(c => c !== "All").map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
+                  {categories
+                    .filter((c) => formData.type === "income" ? c.type === "income" : c.type === "expense")
+                    .map((cat) => (
+                      <option key={cat.name} value={cat.name}>{cat.name}</option>
+                    ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryModal(true)}
+                  className="mt-2 text-xs text-primary hover:underline"
+                >
+                  + Add new category
+                </button>
               </div>
 
               <Input
@@ -379,6 +489,250 @@ export default function TransactionsPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Management Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg max-h-[80vh] overflow-y-auto">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Manage Categories</h2>
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="rounded p-1 hover:bg-accent"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Add New Category */}
+            <div className="mb-6 rounded-lg border border-border p-4">
+              <h3 className="mb-3 text-sm font-medium">Add New Category</h3>
+              <div className="space-y-3">
+                <Input
+                  placeholder="Category name"
+                  value={newCategory.name}
+                  onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                />
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs text-muted-foreground">Type</label>
+                    <select
+                      value={newCategory.type}
+                      onChange={(e) => setNewCategory({ ...newCategory, type: e.target.value as "income" | "expense" })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Color</label>
+                    <input
+                      type="color"
+                      value={newCategory.color}
+                      onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                      className="h-9 w-9 cursor-pointer rounded border border-border"
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleAddCategory} disabled={!newCategory.name.trim()} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Category
+                </Button>
+              </div>
+            </div>
+
+            {/* Existing Categories */}
+            <div>
+              <h3 className="mb-3 text-sm font-medium">Expense Categories</h3>
+              <div className="space-y-2 mb-4">
+                {categories.filter((c) => c.type === "expense").map((cat) => (
+                  <div
+                    key={cat.name}
+                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-4 w-4 rounded-full"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="text-sm">{cat.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.name)}
+                      className="rounded p-1 hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="mb-3 text-sm font-medium">Income Categories</h3>
+              <div className="space-y-2">
+                {categories.filter((c) => c.type === "income").map((cat) => (
+                  <div
+                    key={cat.name}
+                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-4 w-4 rounded-full"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="text-sm">{cat.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.name)}
+                      className="rounded p-1 hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={() => setShowCategoryModal(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Import Bank Statement</h2>
+              <button
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadResult(null);
+                }}
+                className="rounded p-1 hover:bg-accent"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {!uploadResult ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Upload a CSV or PDF bank statement. Categories will be auto-detected based on transaction descriptions.
+                </p>
+
+                <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
+                  <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                  <p className="mb-2 text-sm font-medium">
+                    Drop your CSV or PDF file here or click to browse
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Supports: CSV and PDF bank statements
+                  </p>
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                    {uploading ? "Uploading..." : "Choose File"}
+                    <input
+                      type="file"
+                      accept=".csv,.pdf"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </label>
+                </div>
+
+                <div className="rounded-lg bg-muted/50 p-4">
+                  <p className="text-xs font-medium mb-2">Supported formats:</p>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-xs font-medium">CSV Files</p>
+                        <p className="text-xs text-muted-foreground">
+                          Date, Description, Amount, Type columns
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-xs font-medium">PDF Bank Statements</p>
+                        <p className="text-xs text-muted-foreground">
+                          Indonesian bank statements (bluAccount, BCA, BRI, etc.)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-muted/50 p-4">
+                  <p className="text-xs font-medium mb-2">Auto-detected categories:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {["Food & Dining", "Transportation", "Shopping", "Bills & Utilities", "Entertainment"].map((cat) => (
+                      <span key={cat} className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div
+                  className={`rounded-lg p-4 ${
+                    uploadResult.count > 0
+                      ? "bg-success/10 border border-success/20"
+                      : "bg-destructive/10 border border-destructive/20"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle
+                      className={`h-5 w-5 ${
+                        uploadResult.count > 0 ? "text-success" : "text-destructive"
+                      }`}
+                    />
+                    <p className="font-medium">{uploadResult.message}</p>
+                  </div>
+                </div>
+
+                {uploadResult.errors && uploadResult.errors.length > 0 && (
+                  <div className="rounded-lg border border-border p-4 max-h-40 overflow-y-auto">
+                    <p className="text-xs font-medium mb-2 text-muted-foreground">
+                      Warnings ({uploadResult.errors.length}):
+                    </p>
+                    {uploadResult.errors.slice(0, 10).map((err, i) => (
+                      <p key={i} className="text-xs text-muted-foreground">
+                        {err}
+                      </p>
+                    ))}
+                    {uploadResult.errors.length > 10 && (
+                      <p className="text-xs text-muted-foreground">
+                        ...and {uploadResult.errors.length - 10} more
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadResult(null);
+                  }}
+                >
+                  Done
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

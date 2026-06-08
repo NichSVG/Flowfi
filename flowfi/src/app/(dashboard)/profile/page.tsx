@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { User, Mail, Lock, Bell, Moon, Sun, LogOut, Save } from "lucide-react";
+import { User, Mail, Lock, Bell, Moon, Sun, LogOut, Save, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/components/theme-provider";
+import { signOut } from "next-auth/react";
 
 export default function ProfilePage() {
   const { theme, setTheme } = useTheme();
@@ -19,6 +20,8 @@ export default function ProfilePage() {
     weeklyReport: true,
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -31,6 +34,23 @@ export default function ProfilePage() {
     setSaving(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setSaving(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/user/delete", { method: "DELETE" });
+      if (res.ok) {
+        await signOut({ callbackUrl: "/" });
+      } else {
+        alert("Failed to delete account. Please try again.");
+      }
+    } catch {
+      alert("An error occurred. Please try again.");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   return (
@@ -244,12 +264,50 @@ export default function ProfilePage() {
                 Permanently delete your account and all data
               </p>
             </div>
-            <Button variant="destructive" size="sm">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
               Delete Account
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-destructive mb-2">
+              Delete Account
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              This will permanently delete your account, all transactions, budgets,
+              goals, and categories. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleDeleteAccount}
+                loading={deleting}
+              >
+                Delete Forever
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
