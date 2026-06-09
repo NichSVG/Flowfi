@@ -24,6 +24,8 @@ interface Category {
   name: string;
   color: string | null;
   type: string;
+  parentId: string | null;
+  children?: Category[];
 }
 
 interface Transaction {
@@ -75,7 +77,7 @@ export default function TransactionsPage() {
     try {
       const [transRes, catRes] = await Promise.all([
         fetch("/api/transactions?limit=100"),
-        fetch("/api/categories"),
+        fetch("/api/categories?flat=true"),
       ]);
 
       if (transRes.ok) {
@@ -85,7 +87,7 @@ export default function TransactionsPage() {
 
       if (catRes.ok) {
         const data = await catRes.json();
-        setCategories(Array.isArray(data) ? data : data.categories || []);
+        setCategories(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -212,15 +214,17 @@ export default function TransactionsPage() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setUploading(true);
     setUploadResult(null);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -304,9 +308,23 @@ export default function TransactionsPage() {
                 className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
               >
                 <option value="All">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
+                {categories
+                  .filter((c) => c.parentId === null)
+                  .map((parent) => {
+                    const children = categories.filter((c) => c.parentId === parent.id);
+                    if (children.length === 0) {
+                      return (
+                        <option key={parent.id} value={parent.name}>{parent.name}</option>
+                      );
+                    }
+                    return (
+                      <optgroup key={parent.id} label={parent.name}>
+                        {children.map((child) => (
+                          <option key={child.id} value={child.name}>{child.name}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
               </select>
               <select
                 value={selectedType}
@@ -459,10 +477,22 @@ export default function TransactionsPage() {
                 >
                   <option value="">Select category</option>
                   {categories
-                    .filter((c) => formData.type === "income" ? c.type === "income" : c.type === "expense")
-                    .map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
+                    .filter((c) => c.parentId === null && (formData.type === "income" ? c.type === "income" : c.type === "expense"))
+                    .map((parent) => {
+                      const children = categories.filter((c) => c.parentId === parent.id);
+                      if (children.length === 0) {
+                        return (
+                          <option key={parent.id} value={parent.id}>{parent.name}</option>
+                        );
+                      }
+                      return (
+                        <optgroup key={parent.id} label={parent.name}>
+                          {children.map((child) => (
+                            <option key={child.id} value={child.id}>{child.name}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -641,16 +671,17 @@ export default function TransactionsPage() {
                 <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
                   <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
                   <p className="mb-2 text-sm font-medium">
-                    Drop your CSV or PDF file here or click to browse
+                    Drop your CSV or PDF files here or click to browse
                   </p>
                   <p className="text-xs text-muted-foreground mb-4">
-                    Supports: CSV and PDF bank statements
+                    Supports: CSV and PDF bank statements (multiple files allowed)
                   </p>
                   <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-                    {uploading ? "Uploading..." : "Choose File"}
+                    {uploading ? "Uploading..." : "Choose Files"}
                     <input
                       type="file"
                       accept=".csv,.pdf"
+                      multiple
                       onChange={handleFileUpload}
                       className="hidden"
                       disabled={uploading}

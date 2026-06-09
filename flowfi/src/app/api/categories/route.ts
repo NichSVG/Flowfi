@@ -11,6 +11,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
+    const flat = searchParams.get("flat");
 
     const where: any = {
       OR: [
@@ -23,12 +24,34 @@ export async function GET(req: Request) {
       where.type = type;
     }
 
-    const categories = await prisma.category.findMany({
-      where,
+    if (flat === "true") {
+      const categories = await prisma.category.findMany({
+        where,
+        orderBy: { name: "asc" },
+      });
+      return NextResponse.json(categories);
+    }
+
+    const parentCategories = await prisma.category.findMany({
+      where: {
+        ...where,
+        parentId: null,
+      },
+      include: {
+        children: {
+          where: {
+            OR: [
+              { userId: session.user.id },
+              { isDefault: true, userId: null },
+            ],
+          },
+          orderBy: { name: "asc" },
+        },
+      },
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(categories);
+    return NextResponse.json(parentCategories);
   } catch (error) {
     console.error("Error fetching categories:", error);
     return NextResponse.json(
@@ -46,7 +69,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { name, icon, color, type } = body;
+    const { name, icon, color, type, parentId } = body;
 
     if (!name || !type) {
       return NextResponse.json(
@@ -62,6 +85,7 @@ export async function POST(req: Request) {
         color,
         type,
         userId: session.user.id,
+        parentId: parentId || null,
       },
     });
 

@@ -64,20 +64,23 @@ model VerificationToken {
 }
 
 model Category {
-  id        String   @id @default(cuid())
-  name      String
-  icon      String?
-  color     String?
-  type      String
-  userId    String?
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id          String        @id @default(cuid())
+  name        String
+  icon        String?
+  color       String?
+  type        String
+  userId      String?
+  isDefault   Boolean       @default(false)
+  parentId    String?
+  parent      Category?     @relation("Subcategories", fields: [parentId], references: [id])
+  children    Category[]    @relation("Subcategories")
+  createdAt   DateTime      @default(now())
 
   user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
   budgets       Budget[]
 
-  @@unique([name, userId])
+  @@unique([name, userId, parentId])
 }
 
 model Transaction {

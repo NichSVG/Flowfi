@@ -3,69 +3,220 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { detectCurrency } from "@/lib/currency";
 
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  "Food & Dining": [
-    "makan", "food", "restaurant", "cafe", "warung", "kantin", "bakmie", "nasi",
-    "sate", "ayam", "ikan", "gorengan", "grocery", "supermarket", "pasar",
-    "bread", "cake", "donut", "jco", "mcdonald", "kfc", "pizza", "burger",
-    "starbucks", "kopitiam", "warkop", "sambal", "padang", "warteg",
-    "foodsomnia", "guldens", "tahu", "bakmi", "kwetiau", "mie", "soto",
-    "bakso", "siomay", "rendang", "pecel", "gado", "rujak", "es teh",
-    "jus", "kopi", "teh", "minuman", "drink", "rumah makan"
-  ],
-  "Transportation": [
-    "gojek", "grab", "gopay", "ovo", "dana", "shopeepay", "transport",
-    "bensin", "fuel", "parkir", "toll", "taksi", "taxi", "bus", "kereta",
-    "pesawat", "flight", "travel", "decathlon"
-  ],
-  "Bills & Utilities": [
-    "listrik", "pln", "air", "pdam", "gas", "internet", "wifi", "telkom",
-    "indosat", "telkomsel", "xl", "tri", "iour", "pulsa", "token",
-    "telepon", "phone", "bill", "tagihan", "utility"
-  ],
-  "Entertainment": [
-    "netflix", "spotify", "youtube", "disney", "hbo", "game", "steam",
-    "playstation", "xbox", "nintendo", "bioskop", "cinema", "tiket",
-    "konser", "event", "subscription"
-  ],
-  "Shopping": [
-    "shopee", "tokopedia", "lazada", "blibli", "bukalapak", "tiktok shop",
-    "amazon", "elektronik", "fashion", "baju", "sepatu", "tas",
-    "handphone", "laptop", "komputer", "alfamart", "alfa_", "indomaret",
-    "minimarket", "convenience store", "7-eleven", "family mart", "circle k"
-  ],
-  "Health": [
-    "apotek", "farmasi", "dokter", "rumah sakit", "hospital", "klinik",
-    "obat", "medicine", "vitamin", "gym", "fitness", "health"
-  ],
-  "Education": [
-    "sekolah", "universitas", "kuliah", "kursus", "buku", "book",
-    "course", "training", "seminar", "workshop", "pendidikan"
-  ],
-  "Salary": [
-    "gaji", "salary", "payroll", "upah", "bonus", "tunjangan", "dana masuk"
-  ],
-  "Freelance": [
-    "freelance", "project", "konsultasi", "consulting", "jasa", "service"
-  ],
-  "Investments": [
-    "investasi", "saham", "stock", "reksadana", "mutual fund", "deposito",
-    "tabungan", "saving", "bunga", "interest", "dividend", "return"
-  ],
+const CATEGORY_KEYWORDS: Record<string, { keywords: string[]; subcategory?: string }> = {
+  // Housing & Utilities
+  "Housing": {
+    keywords: ["rent", "mortgage", "sewa", "cicilan rumah"],
+    subcategory: "Rent/Mortgage"
+  },
+  "Electricity": {
+    keywords: ["listrik", "pln", "token listrik"],
+    subcategory: "Electricity"
+  },
+  "Water": {
+    keywords: ["air", "pdam", "air bersih"],
+    subcategory: "Water"
+  },
+  "Internet": {
+    keywords: ["internet", "wifi", "telkom", "indihome", "biznet", "cbn"],
+    subcategory: "Internet"
+  },
+  "Gas": {
+    keywords: ["gas", "elpiji", "lpg", "gas alam"],
+    subcategory: "Gas"
+  },
+
+  // Food & Dining
+  "Groceries": {
+    keywords: ["grocery", "supermarket", "pasar", "sayur", "buah", "daging", "ikan", "ayam", "beras", "minyak", "gula", "tepung", "susu"],
+    subcategory: "Groceries"
+  },
+  "Restaurants": {
+    keywords: ["restaurant", "resto", "warung", "kantin", "rumah makan", "padang", "warteg", "bakmie", "bakmi", "nasi", "sate", "soto", "bakso", "siomay", "rendang", "pecel", "gado", "rujak", "mcdonald", "kfc", "pizza", "burger", "jco", "starbucks", "kopitiam", "warkop", "foodsomnia", "guldens", "tahu", "kwetiau", "mie", "sambal", "makan"],
+    subcategory: "Restaurants"
+  },
+  "Coffee & Snacks": {
+    keywords: ["coffee", "kopi", "cafe", "snack", "gorengan", "roti", "cake", "donut", "es teh", "jus", "teh", "minuman", "drink"],
+    subcategory: "Coffee & Snacks"
+  },
+  "Food Delivery": {
+    keywords: ["gofood", "grabfood", "shopeefood", "delivery", "antaran"],
+    subcategory: "Food Delivery"
+  },
+
+  // Transportation
+  "Fuel": {
+    keywords: ["bensin", "fuel", "spbu", "pertamina", "shell", "bp", "vivo"],
+    subcategory: "Fuel"
+  },
+  "Public Transport": {
+    keywords: ["bus", "kereta", "train", "mrt", "lrt", "transjakarta", "krl", "commuter"],
+    subcategory: "Public Transport"
+  },
+  "Ride-Hailing": {
+    keywords: ["gojek", "grab", "uber", "gocar", "grabcar", "gopay", "ovo", "dana", "shopeepay"],
+    subcategory: "Ride-Hailing"
+  },
+  "Parking": {
+    keywords: ["parkir", "parking"],
+    subcategory: "Parking"
+  },
+  "Toll Fees": {
+    keywords: ["toll", "tol", "e-toll", "mandiri e-toll"],
+    subcategory: "Toll Fees"
+  },
+
+  // Shopping
+  "Online Shopping": {
+    keywords: ["shopee", "tokopedia", "lazada", "blibli", "bukalapak", "tiktok shop", "amazon", "online"],
+    subcategory: "Online Shopping"
+  },
+  "Clothing": {
+    keywords: ["baju", "fashion", "sepatu", "tas", "clothing", "pakaian", "celana", "jaket"],
+    subcategory: "Clothing"
+  },
+  "Electronics": {
+    keywords: ["elektronik", "handphone", "laptop", "komputer", "gadget", "hp", "tablet"],
+    subcategory: "Electronics"
+  },
+  "Convenience Store": {
+    keywords: ["alfamart", "alfa_", "indomaret", "minimarket", "convenience store", "7-eleven", "family mart", "circle k", "lawson"],
+    subcategory: "Convenience Store"
+  },
+
+  // Entertainment
+  "Streaming Services": {
+    keywords: ["netflix", "spotify", "youtube", "disney", "hbo", "vidio", "wetv", "iqiyi", "bstation"],
+    subcategory: "Streaming Services"
+  },
+  "Movies": {
+    keywords: ["bioskop", "cinema", "xxi", "cgv", "cinemaxx", "film", "movie"],
+    subcategory: "Movies"
+  },
+  "Games": {
+    keywords: ["game", "steam", "playstation", "xbox", "nintendo", "mobile legends", "pubg", "genshin"],
+    subcategory: "Games"
+  },
+  "Events": {
+    keywords: ["konser", "event", "tiket", "concert", "festival", "exhibition"],
+    subcategory: "Events"
+  },
+
+  // Health & Medical
+  "Doctor Visits": {
+    keywords: ["dokter", "doctor", "rumah sakit", "hospital", "klinik", "clinic", "puskesmas"],
+    subcategory: "Doctor Visits"
+  },
+  "Medicine": {
+    keywords: ["apotek", "farmasi", "obat", "medicine", "vitamin", "suplemen", "pharmacy"],
+    subcategory: "Medicine"
+  },
+  "Insurance": {
+    keywords: ["asuransi", "insurance", "bpjs", "prudential", "allianz", "manulife"],
+    subcategory: "Insurance"
+  },
+  "Fitness/Gym": {
+    keywords: ["gym", "fitness", "olahraga", "sport", "senam", "yoga"],
+    subcategory: "Fitness/Gym"
+  },
+
+  // Education
+  "School Fees": {
+    keywords: ["sekolah", "school", "universitas", "university", "kuliah", "spp", "uang sekolah"],
+    subcategory: "School Fees"
+  },
+  "Courses": {
+    keywords: ["kursus", "course", "training", "seminar", "workshop", "bootcamp", "udemy", "coursera"],
+    subcategory: "Courses"
+  },
+  "Books": {
+    keywords: ["buku", "book", "gramedia", "tokobuku", "ebook"],
+    subcategory: "Books"
+  },
+
+  // Subscriptions
+  "Software Licenses": {
+    keywords: ["chatgpt", "openai", "microsoft", "adobe", "canva", "figma", "notion", "software", "license"],
+    subcategory: "Software Licenses"
+  },
+  "Cloud Storage": {
+    keywords: ["google drive", "icloud", "dropbox", "onedrive", "cloud storage", "storage"],
+    subcategory: "Cloud Storage"
+  },
+
+  // Financial
+  "Loan Payments": {
+    keywords: ["cicilan", "loan", "kredit", "angsuran", "installment"],
+    subcategory: "Loan Payments"
+  },
+  "Credit Card Payments": {
+    keywords: ["kartu kredit", "credit card", "cc payment", "tagihan kartu kredit"],
+    subcategory: "Credit Card Payments"
+  },
+  "Taxes": {
+    keywords: ["pajak", "tax", "pph", "ppn", "e-billing"],
+    subcategory: "Taxes"
+  },
+  "Bank Fees": {
+    keywords: ["biaya admin", "admin fee", "bank fee", "transfer fee", "biaya transfer"],
+    subcategory: "Bank Fees"
+  },
+
+  // Travel
+  "Flights": {
+    keywords: ["pesawat", "flight", "airline", "garuda", "lion air", "airasia", "citilink", "tiket.com", "traveloka"],
+    subcategory: "Flights"
+  },
+  "Hotels": {
+    keywords: ["hotel", "penginapan", "homestay", "villa", "airbnb", "booking.com", "agoda"],
+    subcategory: "Hotels"
+  },
+
+  // Family & Gifts
+  "Gifts": {
+    keywords: ["gift", "hadiah", "kado", "parcel", "bingkisan"],
+    subcategory: "Gifts"
+  },
+  "Donations": {
+    keywords: ["donasi", "donation", "sedekah", "zakat", "infaq", "amal"],
+    subcategory: "Donations"
+  },
+  "Family Support": {
+    keywords: ["transfer ke", "kirim uang", "family", "keluarga", "ortu", "anak", "support"],
+    subcategory: "Family Support"
+  },
+
+  // Income categories
+  "Salary": {
+    keywords: ["gaji", "salary", "payroll", "upah", "tunjangan", "bonus", "THR"],
+    subcategory: "Salary"
+  },
+  "Freelance": {
+    keywords: ["freelance", "project", "konsultasi", "consulting", "jasa", "service", "client"],
+    subcategory: "Freelance"
+  },
+  "Investments": {
+    keywords: ["investasi", "saham", "stock", "reksadana", "mutual fund", "deposito", "dividend", "return", "bunga", "interest"],
+    subcategory: "Investments"
+  },
+  "Refunds": {
+    keywords: ["refund", "return", "cashback", "pengembalian", "retur"],
+    subcategory: "Refunds"
+  },
 };
 
-function detectCategory(description: string, type: string): string {
+function detectCategory(description: string, type: string): { category: string; subcategory?: string } {
   const desc = description.toLowerCase();
 
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    for (const keyword of keywords) {
+  for (const [category, data] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const keyword of data.keywords) {
       if (desc.includes(keyword)) {
-        return category;
+        return { category, subcategory: data.subcategory };
       }
     }
   }
 
-  return type === "income" ? "Other Income" : "Other";
+  return { category: type === "income" ? "Other Income" : "Other" };
 }
 
 function detectPaymentMethod(description: string): string {
@@ -207,12 +358,12 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
 
     const absAmount = Math.abs(amount);
     const date = dateStr ? parseIndonesianDate(dateStr) : new Date();
-    const categoryName = detectCategory(description, type);
-    const categoryId = categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
+    const { category: categoryName, subcategory } = detectCategory(description, type);
+    const categoryId = categoryMap.get(subcategory || categoryName) || categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
     const paymentMethod = detectPaymentMethod(description);
 
     if (!categoryId) {
-      errors.push(`Row ${i + 1}: No matching category for "${categoryName}"`);
+      errors.push(`Row ${i + 1}: No matching category for "${subcategory || categoryName}"`);
       continue;
     }
 
@@ -223,7 +374,7 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
       date,
       categoryId,
       paymentMethod,
-      notes: `Imported from bank statement`,
+      notes: subcategory ? `${categoryName} > ${subcategory}` : categoryName,
     });
   }
 
@@ -315,12 +466,12 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
     }
 
     const absAmount = Math.abs(amount);
-    const categoryName = detectCategory(description, type);
-    const categoryId = categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
+    const { category: categoryName, subcategory } = detectCategory(description, type);
+    const categoryId = categoryMap.get(subcategory || categoryName) || categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
     const paymentMethod = detectPaymentMethod(description);
 
     if (!categoryId) {
-      errors.push(`Line ${i + 1}: No matching category for "${categoryName}"`);
+      errors.push(`Line ${i + 1}: No matching category for "${subcategory || categoryName}"`);
       continue;
     }
 
@@ -331,7 +482,7 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
       date,
       categoryId,
       paymentMethod,
-      notes: `Imported from PDF statement`,
+      notes: subcategory ? `${categoryName} > ${subcategory}` : categoryName,
     });
   }
 
@@ -345,22 +496,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found. Please log out and log in again." },
+        { status: 401 }
+      );
     }
 
-    const fileName = file.name.toLowerCase();
-    const isCSV = fileName.endsWith(".csv");
-    const isPDF = fileName.endsWith(".pdf");
+    const formData = await req.formData();
+    const files = formData.getAll("files") as File[];
 
-    if (!isCSV && !isPDF) {
-      return NextResponse.json(
-        { error: "Only CSV and PDF files are supported" },
-        { status: 400 }
-      );
+    if (!files || files.length === 0) {
+      return NextResponse.json({ error: "No files provided" }, { status: 400 });
     }
 
     const allCategories = await prisma.category.findMany({
@@ -377,37 +528,65 @@ export async function POST(req: Request) {
       categoryMap.set(cat.name, cat.id);
     }
 
-    let transactions: Array<{
-      amount: number;
-      type: string;
-      description: string;
-      date: Date;
-      categoryId: string;
-      paymentMethod: string;
-      notes: string;
-    }>;
-    let errors: string[];
+    let totalCreated = 0;
+    const allErrors: string[] = [];
     let detectedCurrency = "USD";
 
-    if (isCSV) {
-      const text = await file.text();
-      detectedCurrency = detectCurrency(text);
-      const result = parseCSV(text, session.user.id, categoryMap);
-      transactions = result.transactions;
-      errors = result.errors;
-    } else {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const text = await parsePDF(buffer);
-      detectedCurrency = detectCurrency(text);
-      const result = parsePDFText(text, session.user.id, categoryMap);
-      transactions = result.transactions;
-      errors = result.errors;
+    for (const file of files) {
+      const fileName = file.name.toLowerCase();
+      const isCSV = fileName.endsWith(".csv");
+      const isPDF = fileName.endsWith(".pdf");
+
+      if (!isCSV && !isPDF) {
+        allErrors.push(`${file.name}: Unsupported file type`);
+        continue;
+      }
+
+      let transactions: Array<{
+        amount: number;
+        type: string;
+        description: string;
+        date: Date;
+        categoryId: string;
+        paymentMethod: string;
+        notes: string;
+      }>;
+      let errors: string[];
+
+      if (isCSV) {
+        const text = await file.text();
+        detectedCurrency = detectCurrency(text);
+        const result = parseCSV(text, session.user.id, categoryMap);
+        transactions = result.transactions;
+        errors = result.errors;
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const text = await parsePDF(buffer);
+        detectedCurrency = detectCurrency(text);
+        const result = parsePDFText(text, session.user.id, categoryMap);
+        transactions = result.transactions;
+        errors = result.errors;
+      }
+
+      if (transactions.length > 0) {
+        const created = await prisma.transaction.createMany({
+          data: transactions.map((t) => ({
+            ...t,
+            userId: session.user.id,
+          })),
+        });
+        totalCreated += created.count;
+      }
+
+      if (errors.length > 0) {
+        allErrors.push(...errors.map((e) => `${file.name}: ${e}`));
+      }
     }
 
-    if (transactions.length === 0) {
+    if (totalCreated === 0) {
       return NextResponse.json(
-        { error: "No valid transactions found", details: errors },
+        { error: "No valid transactions found", details: allErrors },
         { status: 400 }
       );
     }
@@ -417,18 +596,11 @@ export async function POST(req: Request) {
       data: { currency: detectedCurrency },
     });
 
-    const created = await prisma.transaction.createMany({
-      data: transactions.map((t) => ({
-        ...t,
-        userId: session.user.id,
-      })),
-    });
-
     return NextResponse.json({
-      message: `Imported ${created.count} transactions`,
-      count: created.count,
+      message: `Imported ${totalCreated} transactions from ${files.length} file(s)`,
+      count: totalCreated,
       currency: detectedCurrency,
-      errors: errors.length > 0 ? errors : undefined,
+      errors: allErrors.length > 0 ? allErrors : undefined,
     });
   } catch (error) {
     console.error("Error uploading statement:", error);
