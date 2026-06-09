@@ -25,6 +25,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useCurrency } from "@/lib/use-currency";
 
 interface Transaction {
   id: string;
@@ -43,6 +44,8 @@ interface DashboardData {
   recentTransactions: Transaction[];
   spendingByCategory: { name: string; value: number; color: string }[];
   monthlyTrend: { month: string; income: number; expenses: number }[];
+  budgets: { name: string; budget: number; spent: number; color: string }[];
+  goals: { name: string; target: number; current: number; progress: number; color: string }[];
 }
 
 const emptyData: DashboardData = {
@@ -53,11 +56,14 @@ const emptyData: DashboardData = {
   recentTransactions: [],
   spendingByCategory: [],
   monthlyTrend: [],
+  budgets: [],
+  goals: [],
 };
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
+  const { format } = useCurrency();
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -75,13 +81,6 @@ export default function DashboardPage() {
     }
     fetchDashboard();
   }, []);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
 
   if (loading) {
     return (
@@ -112,7 +111,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Balance</p>
-                <p className="text-2xl font-bold">{formatCurrency(data.balance)}</p>
+                <p className="text-2xl font-bold">{format(data.balance)}</p>
               </div>
               <div className="rounded-full bg-primary/10 p-3">
                 <DollarSign className="h-5 w-5 text-primary" />
@@ -127,7 +126,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Monthly Income</p>
                 <p className="text-2xl font-bold text-success">
-                  {formatCurrency(data.monthlyIncome)}
+                  {format(data.monthlyIncome)}
                 </p>
               </div>
               <div className="rounded-full bg-success/10 p-3">
@@ -143,7 +142,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Monthly Expenses</p>
                 <p className="text-2xl font-bold text-destructive">
-                  {formatCurrency(data.monthlyExpenses)}
+                  {format(data.monthlyExpenses)}
                 </p>
               </div>
               <div className="rounded-full bg-destructive/10 p-3">
@@ -196,7 +195,7 @@ export default function DashboardPage() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Tooltip formatter={(value: number) => format(value)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -229,11 +228,94 @@ export default function DashboardPage() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="month" className="text-xs" />
                     <YAxis className="text-xs" />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip formatter={(value: number) => format(value)} />
                     <Bar dataKey="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card variant="bordered">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Budget Overview</CardTitle>
+              <Link href="/budgets">
+                <Button variant="ghost" size="sm">View All</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.budgets.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No budgets set. <Link href="/budgets" className="text-primary hover:underline">Create one</Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {data.budgets.map((budget) => {
+                  const percentage = budget.budget > 0 ? Math.min((budget.spent / budget.budget) * 100, 100) : 0;
+                  const isOver = budget.spent > budget.budget;
+                  return (
+                    <div key={budget.name} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: budget.color }} />
+                          <span className="text-sm font-medium">{budget.name}</span>
+                        </div>
+                        <span className={`text-xs ${isOver ? "text-destructive" : "text-muted-foreground"}`}>
+                          {format(budget.spent)} / {format(budget.budget)}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full transition-all ${isOver ? "bg-destructive" : "bg-success"}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card variant="bordered">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Savings Goals</CardTitle>
+              <Link href="/goals">
+                <Button variant="ghost" size="sm">View All</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.goals.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No goals set. <Link href="/goals" className="text-primary hover:underline">Create one</Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {data.goals.map((goal) => (
+                  <div key={goal.name} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{goal.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(goal.current)} / {format(goal.target)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(goal.progress, 100)}%`, backgroundColor: goal.color }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -286,7 +368,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     {transaction.type === "income" ? "+" : "-"}
-                    {formatCurrency(transaction.amount)}
+                    {format(transaction.amount)}
                   </p>
                 </div>
               ))}

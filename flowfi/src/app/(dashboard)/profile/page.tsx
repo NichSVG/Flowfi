@@ -1,39 +1,61 @@
 "use client";
 
-import { useState } from "react";
-import { User, Mail, Lock, Bell, Moon, Sun, LogOut, Save, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Mail, Lock, Bell, Moon, Sun, Save, Trash2, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/components/theme-provider";
 import { signOut } from "next-auth/react";
+import { CURRENCIES, getCurrency } from "@/lib/currency";
 
 export default function ProfilePage() {
   const { theme, setTheme } = useTheme();
-  const [name, setName] = useState("John Doe");
-  const [email, setEmail] = useState("john@example.com");
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: true,
-    budgetAlerts: true,
-    goalUpdates: true,
-    weeklyReport: true,
-  });
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [currency, setCurrency] = useState("IDR");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  async function fetchUserData() {
+    try {
+      const res = await fetch("/api/user/profile");
+      if (res.ok) {
+        const data = await res.json();
+        setName(data.name || "");
+        setEmail(data.email || "");
+        setCurrency(data.currency || "IDR");
+      }
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const handleSaveProfile = async () => {
     setSaving(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSaving(false);
-  };
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, currency }),
+      });
 
-  const handleSaveNotifications = async () => {
-    setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSaving(false);
+      if (!res.ok) {
+        alert("Failed to save profile.");
+      }
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -53,16 +75,22 @@ export default function ProfilePage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading profile...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Profile</h1>
         <p className="text-muted-foreground">Manage your account settings</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Profile Card */}
         <Card variant="bordered">
           <CardHeader>
             <CardTitle>Personal Information</CardTitle>
@@ -70,10 +98,12 @@ export default function ProfilePage() {
           <CardContent>
             <div className="mb-6 flex items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary">
-                <span className="text-3xl font-bold text-primary-foreground">J</span>
+                <span className="text-3xl font-bold text-primary-foreground">
+                  {name ? name[0].toUpperCase() : "?"}
+                </span>
               </div>
               <div>
-                <h3 className="text-lg font-semibold">{name}</h3>
+                <h3 className="text-lg font-semibold">{name || "User"}</h3>
                 <p className="text-muted-foreground">{email}</p>
               </div>
             </div>
@@ -88,7 +118,7 @@ export default function ProfilePage() {
                 label="Email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                disabled
               />
               <Button onClick={handleSaveProfile} loading={saving}>
                 <Save className="mr-2 h-4 w-4" />
@@ -98,7 +128,53 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Security Card */}
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>Currency</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Display Currency</p>
+                    <p className="text-sm text-muted-foreground">
+                      Choose how amounts are displayed throughout the app
+                    </p>
+                  </div>
+                </div>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.symbol} {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Currently: {getCurrency(currency).symbol} {getCurrency(currency).name}
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-xs font-medium mb-2">Auto-detected from uploads:</p>
+                <p className="text-xs text-muted-foreground">
+                  When you import a bank statement, the currency will be automatically detected and updated.
+                </p>
+              </div>
+
+              <Button onClick={handleSaveProfile} loading={saving} variant="outline">
+                <Save className="mr-2 h-4 w-4" />
+                Save Currency
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card variant="bordered">
           <CardHeader>
             <CardTitle>Security</CardTitle>
@@ -111,7 +187,7 @@ export default function ProfilePage() {
                     <Lock className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">Password</p>
-                      <p className="text-sm text-muted-foreground">Last changed 3 months ago</p>
+                      <p className="text-sm text-muted-foreground">Manage your password</p>
                     </div>
                   </div>
                   <Button variant="outline" size="sm">
@@ -119,41 +195,10 @@ export default function ProfilePage() {
                   </Button>
                 </div>
               </div>
-
-              <div className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Two-Factor Authentication</p>
-                      <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Enable
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <User className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Connected Accounts</p>
-                      <p className="text-sm text-muted-foreground">Google, GitHub</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Manage
-                  </Button>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Appearance Card */}
         <Card variant="bordered">
           <CardHeader>
             <CardTitle>Appearance</CardTitle>
@@ -206,52 +251,8 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Notifications Card */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {Object.entries({
-                email: "Email Notifications",
-                push: "Push Notifications",
-                budgetAlerts: "Budget Alerts",
-                goalUpdates: "Goal Updates",
-                weeklyReport: "Weekly Report",
-              }).map(([key, label]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Bell className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{label}</span>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      checked={notifications[key as keyof typeof notifications]}
-                      onChange={(e) =>
-                        setNotifications({
-                          ...notifications,
-                          [key]: e.target.checked,
-                        })
-                      }
-                      className="peer sr-only"
-                    />
-                    <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-border after:bg-white after:transition-all peer-checked:bg-primary peer-checked:after:translate-x-full peer-focus:outline-none" />
-                  </label>
-                </div>
-              ))}
-              <Button onClick={handleSaveNotifications} loading={saving} variant="outline">
-                <Save className="mr-2 h-4 w-4" />
-                Save Preferences
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Danger Zone */}
       <Card variant="bordered" className="border-destructive/50">
         <CardHeader>
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
@@ -276,7 +277,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">

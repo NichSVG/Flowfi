@@ -14,68 +14,29 @@ export async function GET() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // Get monthly income
-    const incomeResult = await prisma.transaction.aggregate({
-      where: {
-        userId,
-        type: "income",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-      _sum: { amount: true },
-    });
-
-    // Get monthly expenses
-    const expenseResult = await prisma.transaction.aggregate({
-      where: {
-        userId,
-        type: "expense",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-      _sum: { amount: true },
-    });
-
-    // Get total balance (all time)
     const totalIncome = await prisma.transaction.aggregate({
-      where: { userId, type: "income" },
+      where: { userId, type: "income", date: { gte: startOfMonth, lte: endOfMonth } },
       _sum: { amount: true },
     });
 
     const totalExpenses = await prisma.transaction.aggregate({
-      where: { userId, type: "expense" },
+      where: { userId, type: "expense", date: { gte: startOfMonth, lte: endOfMonth } },
       _sum: { amount: true },
     });
 
-    const monthlyIncome = Number(incomeResult._sum.amount) || 0;
-    const monthlyExpenses = Number(expenseResult._sum.amount) || 0;
-    const balance = (Number(totalIncome._sum.amount) || 0) - (Number(totalExpenses._sum.amount) || 0);
-    const savingsRate = monthlyIncome > 0
-      ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100
-      : 0;
+    const monthlyIncome = Number(totalIncome._sum.amount) || 0;
+    const monthlyExpenses = Number(totalExpenses._sum.amount) || 0;
+    const monthlySavings = monthlyIncome - monthlyExpenses;
+    const savingsRate = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) * 100 : 0;
 
-    // Get spending by category
     const spendingByCategory = await prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: {
-        userId,
-        type: "expense",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
+      where: { userId, type: "expense", date: { gte: startOfMonth, lte: endOfMonth } },
       _sum: { amount: true },
     });
 
     const categories = await prisma.category.findMany({
-      where: {
-        id: { in: spendingByCategory.map((s) => s.categoryId) },
-      },
+      where: { id: { in: spendingByCategory.map((s) => s.categoryId) } },
     });
 
     const categorySpending = spendingByCategory.map((item) => {
@@ -85,17 +46,8 @@ export async function GET() {
         value: Number(item._sum.amount) || 0,
         color: category?.color || "#6b7280",
       };
-    });
+    }).sort((a, b) => b.value - a.value);
 
-    // Get recent transactions
-    const recentTransactions = await prisma.transaction.findMany({
-      where: { userId },
-      include: { category: true },
-      orderBy: { date: "desc" },
-      take: 5,
-    });
-
-    // Get monthly trend (last 6 months)
     const monthlyTrend = [];
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -103,37 +55,58 @@ export async function GET() {
 
       const [monthIncome, monthExpense] = await Promise.all([
         prisma.transaction.aggregate({
-          where: {
-            userId,
-            type: "income",
-            date: { gte: monthStart, lte: monthEnd },
-          },
+          where: { userId, type: "income", date: { gte: monthStart, lte: monthEnd } },
           _sum: { amount: true },
         }),
         prisma.transaction.aggregate({
-          where: {
-            userId,
-            type: "expense",
-            date: { gte: monthStart, lte: monthEnd },
-          },
+          where: { userId, type: "expense", date: { gte: monthStart, lte: monthEnd } },
           _sum: { amount: true },
         }),
       ]);
 
+      const income = Number(monthIncome._sum.amount) || 0;
+      const expenses = Number(monthExpense._sum.amount) || 0;
+
       monthlyTrend.push({
         month: monthStart.toLocaleString("default", { month: "short" }),
-        income: Number(monthIncome._sum.amount) || 0,
-        expenses: Number(monthExpense._sum.amount) || 0,
+        income,
+        expenses,
+        savings: income - expenses,
+      });
+    }
+
+    const topExpenses = await prisma.transaction.findMany({
+      where: { userId, type: "expense", date: { gte: startOfMonth, lte: endOfMonth } },
+      include: { category: true },
+      orderBy: { amount: "desc" },
+      take: 5,
+    });
+
+    const weeklySpending = [];
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const dayTotal = await prisma.transaction.aggregate({
+        where: { userId, type: "expense", date: { gte: dayStart, lt: dayEnd } },
+        _sum: { amount: true },
+      });
+
+      weeklySpending.push({
+        day: dayNames[dayStart.getDay()],
+        amount: Number(dayTotal._sum.amount) || 0,
       });
     }
 
     const budgets = await prisma.budget.findMany({
       where: { userId },
       include: { category: true },
-      take: 3,
     });
 
-    const budgetSummaries = await Promise.all(
+    const budgetsWithSpent = await Promise.all(
       budgets.map(async (budget) => {
         const result = await prisma.transaction.aggregate({
           where: {
@@ -156,11 +129,9 @@ export async function GET() {
 
     const goals = await prisma.goal.findMany({
       where: { userId },
-      take: 3,
-      orderBy: { createdAt: "desc" },
     });
 
-    const goalSummaries = goals.map((goal) => ({
+    const goalProgress = goals.map((goal) => ({
       name: goal.name,
       target: Number(goal.targetAmount),
       current: Number(goal.currentAmount),
@@ -171,18 +142,25 @@ export async function GET() {
     }));
 
     return NextResponse.json({
-      balance,
-      monthlyIncome,
-      monthlyExpenses,
-      savingsRate,
+      summary: {
+        totalIncome: monthlyIncome,
+        totalExpenses: monthlyExpenses,
+        totalSavings: monthlySavings,
+        savingsRate,
+      },
       spendingByCategory: categorySpending,
-      recentTransactions,
       monthlyTrend,
-      budgets: budgetSummaries,
-      goals: goalSummaries,
+      weeklySpending,
+      topExpenses: topExpenses.map((t) => ({
+        description: t.description || "Expense",
+        amount: Number(t.amount),
+        category: t.category?.name || "Unknown",
+      })),
+      budgets: budgetsWithSpent,
+      goals: goalProgress,
     });
   } catch (error) {
-    console.error("Error fetching dashboard data:", error);
+    console.error("Error fetching analytics:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

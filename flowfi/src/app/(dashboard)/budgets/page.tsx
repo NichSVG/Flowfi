@@ -1,109 +1,132 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, X, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useCurrency } from "@/lib/use-currency";
 
-// Mock data
-const mockBudgets = [
-  { id: 1, category: "Food & Dining", budget: 500, spent: 385, color: "#ef4444" },
-  { id: 2, category: "Transportation", budget: 300, spent: 220, color: "#3b82f6" },
-  { id: 3, category: "Bills & Utilities", budget: 600, spent: 580, color: "#f59e0b" },
-  { id: 4, category: "Entertainment", budget: 200, spent: 175, color: "#8b5cf6" },
-  { id: 5, category: "Shopping", budget: 400, spent: 420, color: "#ec4899" },
-  { id: 6, category: "Health", budget: 150, spent: 95, color: "#10b981" },
-];
+interface Category {
+  id: string;
+  name: string;
+  color: string | null;
+  type: string;
+}
 
-const categories = [
-  "Food & Dining",
-  "Transportation",
-  "Bills & Utilities",
-  "Entertainment",
-  "Shopping",
-  "Health",
-  "Education",
-];
+interface Budget {
+  id: string;
+  amount: number;
+  period: string;
+  startDate: string;
+  categoryId: string;
+  category: { name: string; color: string | null } | null;
+  spent: number;
+}
 
 export default function BudgetsPage() {
-  const [budgets, setBudgets] = useState(mockBudgets);
+  const { format } = useCurrency();
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<typeof mockBudgets[0] | null>(null);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   const [formData, setFormData] = useState({
-    category: "Food & Dining",
-    budget: "",
+    categoryId: "",
+    amount: "",
     period: "monthly",
   });
 
-  const totalBudget = budgets.reduce((sum, b) => sum + b.budget, 0);
-  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    try {
+      const [budgetsRes, catsRes] = await Promise.all([
+        fetch("/api/budgets"),
+        fetch("/api/categories?type=expense"),
+      ]);
+
+      if (budgetsRes.ok) {
+        const data = await budgetsRes.json();
+        setBudgets(Array.isArray(data) ? data : []);
+      }
+
+      if (catsRes.ok) {
+        const data = await catsRes.json();
+        setCategories(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalSpent = budgets.reduce((sum, b) => sum + Number(b.spent), 0);
   const totalRemaining = totalBudget - totalSpent;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
-
   const getProgressPercentage = (spent: number, budget: number) => {
-    return Math.min((spent / budget) * 100, 100);
+    return budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   };
 
   const getProgressColor = (spent: number, budget: number) => {
-    const percentage = (spent / budget) * 100;
+    const percentage = budget > 0 ? (spent / budget) * 100 : 0;
     if (percentage >= 100) return "bg-destructive";
     if (percentage >= 80) return "bg-warning";
     return "bg-success";
   };
 
-  const handleAddBudget = () => {
-    const newBudget = {
-      id: Date.now(),
-      category: formData.category,
-      budget: parseFloat(formData.budget),
-      spent: 0,
-      color: "#6366f1",
-    };
-    setBudgets([...budgets, newBudget]);
-    setShowAddModal(false);
-    resetForm();
+  const handleAddBudget = async () => {
+    try {
+      const res = await fetch("/api/budgets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categoryId: formData.categoryId,
+          amount: parseFloat(formData.amount),
+          period: formData.period,
+        }),
+      });
+
+      if (res.ok) {
+        setShowAddModal(false);
+        resetForm();
+        fetchData();
+      }
+    } catch (error) {
+      console.error("Failed to add budget:", error);
+    }
   };
 
-  const handleEditBudget = () => {
-    if (!editingBudget) return;
-    const updatedBudgets = budgets.map((b) =>
-      b.id === editingBudget.id
-        ? { ...b, category: formData.category, budget: parseFloat(formData.budget) }
-        : b
-    );
-    setBudgets(updatedBudgets);
-    setEditingBudget(null);
-    resetForm();
-  };
-
-  const handleDeleteBudget = (id: number) => {
-    setBudgets(budgets.filter((b) => b.id !== id));
+  const handleDeleteBudget = async (id: string) => {
+    try {
+      const res = await fetch(`/api/budgets/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setBudgets(budgets.filter((b) => b.id !== id));
+      }
+    } catch (error) {
+      console.error("Failed to delete budget:", error);
+    }
   };
 
   const resetForm = () => {
-    setFormData({ category: "Food & Dining", budget: "", period: "monthly" });
+    setFormData({ categoryId: "", amount: "", period: "monthly" });
   };
 
-  const openEditModal = (budget: typeof mockBudgets[0]) => {
-    setEditingBudget(budget);
-    setFormData({
-      category: budget.category,
-      budget: budget.budget.toString(),
-      period: "monthly",
-    });
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading budgets...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Budgets</h1>
@@ -115,109 +138,105 @@ export default function BudgetsPage() {
         </Button>
       </div>
 
-      {/* Overview Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card variant="bordered">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Budget</p>
-            <p className="text-2xl font-bold">{formatCurrency(totalBudget)}</p>
+            <p className="text-2xl font-bold">{format(totalBudget)}</p>
           </CardContent>
         </Card>
         <Card variant="bordered">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Spent</p>
-            <p className="text-2xl font-bold text-destructive">{formatCurrency(totalSpent)}</p>
+            <p className="text-2xl font-bold text-destructive">{format(totalSpent)}</p>
           </CardContent>
         </Card>
         <Card variant="bordered">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Remaining</p>
             <p className={`text-2xl font-bold ${totalRemaining >= 0 ? "text-success" : "text-destructive"}`}>
-              {formatCurrency(totalRemaining)}
+              {format(totalRemaining)}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Budget Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {budgets.map((budget) => {
-          const percentage = getProgressPercentage(budget.spent, budget.budget);
-          const isOverBudget = budget.spent > budget.budget;
+      {budgets.length === 0 ? (
+        <Card variant="bordered">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No budgets yet. Create one to start tracking your spending limits.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {budgets.map((budget) => {
+            const percentage = getProgressPercentage(budget.spent, Number(budget.amount));
+            const isOverBudget = budget.spent > Number(budget.amount);
 
-          return (
-            <Card key={budget.id} variant="bordered">
-              <CardContent className="pt-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+            return (
+              <Card key={budget.id} variant="bordered">
+                <CardContent className="pt-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: budget.category?.color || "#6b7280" }}
+                      />
+                      <h3 className="font-medium">{budget.category?.name || "Unknown"}</h3>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleDeleteBudget(budget.id)}
+                        className="rounded p-1 hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {format(budget.spent)} of {format(Number(budget.amount))}
+                    </span>
+                    <span className={isOverBudget ? "text-destructive" : "text-muted-foreground"}>
+                      {percentage.toFixed(0)}%
+                    </span>
+                  </div>
+
+                  <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: budget.color }}
+                      className={`h-full rounded-full transition-all ${getProgressColor(budget.spent, Number(budget.amount))}`}
+                      style={{ width: `${percentage}%` }}
                     />
-                    <h3 className="font-medium">{budget.category}</h3>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => openEditModal(budget)}
-                      className="rounded p-1 hover:bg-accent"
-                    >
-                      <Edit2 className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteBudget(budget.id)}
-                      className="rounded p-1 hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </button>
-                  </div>
-                </div>
 
-                <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {formatCurrency(budget.spent)} of {formatCurrency(budget.budget)}
-                  </span>
-                  <span className={isOverBudget ? "text-destructive" : "text-muted-foreground"}>
-                    {percentage.toFixed(0)}%
-                  </span>
-                </div>
+                  {isOverBudget && (
+                    <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-2 text-xs text-destructive">
+                      <AlertTriangle className="h-3 w-3" />
+                      Over budget by {format(budget.spent - Number(budget.amount))}
+                    </div>
+                  )}
 
-                <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full transition-all ${getProgressColor(budget.spent, budget.budget)}`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
+                  {!isOverBudget && (
+                    <p className="text-xs text-muted-foreground">
+                      {format(Number(budget.amount) - budget.spent)} remaining
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
-                {isOverBudget && (
-                  <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-2 text-xs text-destructive">
-                    <AlertTriangle className="h-3 w-3" />
-                    Over budget by {formatCurrency(budget.spent - budget.budget)}
-                  </div>
-                )}
-
-                {!isOverBudget && (
-                  <p className="text-xs text-muted-foreground">
-                    {formatCurrency(budget.budget - budget.spent)} remaining
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Add/Edit Budget Modal */}
-      {(showAddModal || editingBudget) && (
+      {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                {editingBudget ? "Edit Budget" : "Add Budget"}
-              </h2>
+              <h2 className="text-lg font-semibold">Add Budget</h2>
               <button
                 onClick={() => {
                   setShowAddModal(false);
-                  setEditingBudget(null);
                   resetForm();
                 }}
                 className="rounded p-1 hover:bg-accent"
@@ -230,12 +249,13 @@ export default function BudgetsPage() {
               <div>
                 <label className="mb-2 block text-sm font-medium">Category</label>
                 <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  value={formData.categoryId}
+                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
                 >
+                  <option value="">Select category</option>
                   {categories.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
@@ -245,8 +265,8 @@ export default function BudgetsPage() {
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={formData.budget}
-                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               />
 
               <div>
@@ -268,7 +288,6 @@ export default function BudgetsPage() {
                   className="flex-1"
                   onClick={() => {
                     setShowAddModal(false);
-                    setEditingBudget(null);
                     resetForm();
                   }}
                 >
@@ -276,10 +295,10 @@ export default function BudgetsPage() {
                 </Button>
                 <Button
                   className="flex-1"
-                  onClick={editingBudget ? handleEditBudget : handleAddBudget}
-                  disabled={!formData.budget}
+                  onClick={handleAddBudget}
+                  disabled={!formData.categoryId || !formData.amount}
                 >
-                  {editingBudget ? "Save Changes" : "Add Budget"}
+                  Add Budget
                 </Button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { detectCurrency } from "@/lib/currency";
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   "Food & Dining": [
@@ -230,9 +231,20 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
 }
 
 async function parsePDF(buffer: Buffer) {
-  const pdfParse = (await import("pdf-parse")).default;
-  const data = await pdfParse(buffer);
-  return data.text;
+  const pdfjsLib = await import("pdfjs-dist");
+  const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let text = "";
+  
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => item.str)
+      .join(" ");
+    text += pageText + "\n";
+  }
+  
+  return text;
 }
 
 function parsePDFText(text: string, userId: string, categoryMap: Map<string, string>) {
@@ -375,9 +387,11 @@ export async function POST(req: Request) {
       notes: string;
     }>;
     let errors: string[];
+    let detectedCurrency = "USD";
 
     if (isCSV) {
       const text = await file.text();
+      detectedCurrency = detectCurrency(text);
       const result = parseCSV(text, session.user.id, categoryMap);
       transactions = result.transactions;
       errors = result.errors;
@@ -385,6 +399,7 @@ export async function POST(req: Request) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const text = await parsePDF(buffer);
+      detectedCurrency = detectCurrency(text);
       const result = parsePDFText(text, session.user.id, categoryMap);
       transactions = result.transactions;
       errors = result.errors;
@@ -397,6 +412,11 @@ export async function POST(req: Request) {
       );
     }
 
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { currency: detectedCurrency },
+    });
+
     const created = await prisma.transaction.createMany({
       data: transactions.map((t) => ({
         ...t,
@@ -407,6 +427,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       message: `Imported ${created.count} transactions`,
       count: created.count,
+      currency: detectedCurrency,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
