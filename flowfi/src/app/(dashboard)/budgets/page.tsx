@@ -22,6 +22,13 @@ interface Budget {
   categoryId: string;
   category: { name: string; color: string | null } | null;
   spent: number;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+}
+
+interface BudgetsResponse {
+  budgets: Budget[];
+  currentMonth: string;
 }
 
 export default function BudgetsPage() {
@@ -31,6 +38,7 @@ export default function BudgetsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [currentMonth, setCurrentMonth] = useState("");
 
   const [formData, setFormData] = useState({
     categoryId: "",
@@ -50,8 +58,9 @@ export default function BudgetsPage() {
       ]);
 
       if (budgetsRes.ok) {
-        const data = await budgetsRes.json();
-        setBudgets(Array.isArray(data) ? data : []);
+        const data: BudgetsResponse = await budgetsRes.json();
+        setBudgets(Array.isArray(data.budgets) ? data.budgets : []);
+        setCurrentMonth(data.currentMonth || "");
       }
 
       if (catsRes.ok) {
@@ -130,7 +139,9 @@ export default function BudgetsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Budgets</h1>
-          <p className="text-muted-foreground">Set spending limits for each category</p>
+          <p className="text-muted-foreground">
+            {currentMonth ? `Tracking spending for ${currentMonth}` : "Set spending limits for each category"}
+          </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -222,6 +233,10 @@ export default function BudgetsPage() {
                       {format(Number(budget.amount) - budget.spent)} remaining
                     </p>
                   )}
+
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {budget.period === "monthly" ? "Monthly" : budget.period === "weekly" ? "Weekly" : "Yearly"} budget
+                  </p>
                 </CardContent>
               </Card>
             );

@@ -2,221 +2,48 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { detectCurrency } from "@/lib/currency";
+import { CATEGORY_KEYWORDS } from "@/lib/category-keywords";
 
-const CATEGORY_KEYWORDS: Record<string, { keywords: string[]; subcategory?: string }> = {
-  // Housing & Utilities
-  "Housing": {
-    keywords: ["rent", "mortgage", "sewa", "cicilan rumah"],
-    subcategory: "Rent/Mortgage"
-  },
-  "Electricity": {
-    keywords: ["listrik", "pln", "token listrik"],
-    subcategory: "Electricity"
-  },
-  "Water": {
-    keywords: ["air", "pdam", "air bersih"],
-    subcategory: "Water"
-  },
-  "Internet": {
-    keywords: ["internet", "wifi", "telkom", "indihome", "biznet", "cbn"],
-    subcategory: "Internet"
-  },
-  "Gas": {
-    keywords: ["gas", "elpiji", "lpg", "gas alam"],
-    subcategory: "Gas"
-  },
+const SUBCATEGORY_TO_PARENT: Record<string, string> = {};
 
-  // Food & Dining
-  "Groceries": {
-    keywords: ["grocery", "supermarket", "pasar", "sayur", "buah", "daging", "ikan", "ayam", "beras", "minyak", "gula", "tepung", "susu"],
-    subcategory: "Groceries"
-  },
-  "Restaurants": {
-    keywords: ["restaurant", "resto", "warung", "kantin", "rumah makan", "padang", "warteg", "bakmie", "bakmi", "nasi", "sate", "soto", "bakso", "siomay", "rendang", "pecel", "gado", "rujak", "mcdonald", "kfc", "pizza", "burger", "jco", "starbucks", "kopitiam", "warkop", "foodsomnia", "guldens", "tahu", "kwetiau", "mie", "sambal", "makan"],
-    subcategory: "Restaurants"
-  },
-  "Coffee & Snacks": {
-    keywords: ["coffee", "kopi", "cafe", "snack", "gorengan", "roti", "cake", "donut", "es teh", "jus", "teh", "minuman", "drink"],
-    subcategory: "Coffee & Snacks"
-  },
-  "Food Delivery": {
-    keywords: ["gofood", "grabfood", "shopeefood", "delivery", "antaran"],
-    subcategory: "Food Delivery"
-  },
-
-  // Transportation
-  "Fuel": {
-    keywords: ["bensin", "fuel", "spbu", "pertamina", "shell", "bp", "vivo"],
-    subcategory: "Fuel"
-  },
-  "Public Transport": {
-    keywords: ["bus", "kereta", "train", "mrt", "lrt", "transjakarta", "krl", "commuter"],
-    subcategory: "Public Transport"
-  },
-  "Ride-Hailing": {
-    keywords: ["gojek", "grab", "uber", "gocar", "grabcar", "gopay", "ovo", "dana", "shopeepay"],
-    subcategory: "Ride-Hailing"
-  },
-  "Parking": {
-    keywords: ["parkir", "parking"],
-    subcategory: "Parking"
-  },
-  "Toll Fees": {
-    keywords: ["toll", "tol", "e-toll", "mandiri e-toll"],
-    subcategory: "Toll Fees"
-  },
-
-  // Shopping
-  "Online Shopping": {
-    keywords: ["shopee", "tokopedia", "lazada", "blibli", "bukalapak", "tiktok shop", "amazon", "online"],
-    subcategory: "Online Shopping"
-  },
-  "Clothing": {
-    keywords: ["baju", "fashion", "sepatu", "tas", "clothing", "pakaian", "celana", "jaket"],
-    subcategory: "Clothing"
-  },
-  "Electronics": {
-    keywords: ["elektronik", "handphone", "laptop", "komputer", "gadget", "hp", "tablet"],
-    subcategory: "Electronics"
-  },
-  "Convenience Store": {
-    keywords: ["alfamart", "alfa_", "indomaret", "minimarket", "convenience store", "7-eleven", "family mart", "circle k", "lawson"],
-    subcategory: "Convenience Store"
-  },
-
-  // Entertainment
-  "Streaming Services": {
-    keywords: ["netflix", "spotify", "youtube", "disney", "hbo", "vidio", "wetv", "iqiyi", "bstation"],
-    subcategory: "Streaming Services"
-  },
-  "Movies": {
-    keywords: ["bioskop", "cinema", "xxi", "cgv", "cinemaxx", "film", "movie"],
-    subcategory: "Movies"
-  },
-  "Games": {
-    keywords: ["game", "steam", "playstation", "xbox", "nintendo", "mobile legends", "pubg", "genshin"],
-    subcategory: "Games"
-  },
-  "Events": {
-    keywords: ["konser", "event", "tiket", "concert", "festival", "exhibition"],
-    subcategory: "Events"
-  },
-
-  // Health & Medical
-  "Doctor Visits": {
-    keywords: ["dokter", "doctor", "rumah sakit", "hospital", "klinik", "clinic", "puskesmas"],
-    subcategory: "Doctor Visits"
-  },
-  "Medicine": {
-    keywords: ["apotek", "farmasi", "obat", "medicine", "vitamin", "suplemen", "pharmacy"],
-    subcategory: "Medicine"
-  },
-  "Insurance": {
-    keywords: ["asuransi", "insurance", "bpjs", "prudential", "allianz", "manulife"],
-    subcategory: "Insurance"
-  },
-  "Fitness/Gym": {
-    keywords: ["gym", "fitness", "olahraga", "sport", "senam", "yoga"],
-    subcategory: "Fitness/Gym"
-  },
-
-  // Education
-  "School Fees": {
-    keywords: ["sekolah", "school", "universitas", "university", "kuliah", "spp", "uang sekolah"],
-    subcategory: "School Fees"
-  },
-  "Courses": {
-    keywords: ["kursus", "course", "training", "seminar", "workshop", "bootcamp", "udemy", "coursera"],
-    subcategory: "Courses"
-  },
-  "Books": {
-    keywords: ["buku", "book", "gramedia", "tokobuku", "ebook"],
-    subcategory: "Books"
-  },
-
-  // Subscriptions
-  "Software Licenses": {
-    keywords: ["chatgpt", "openai", "microsoft", "adobe", "canva", "figma", "notion", "software", "license"],
-    subcategory: "Software Licenses"
-  },
-  "Cloud Storage": {
-    keywords: ["google drive", "icloud", "dropbox", "onedrive", "cloud storage", "storage"],
-    subcategory: "Cloud Storage"
-  },
-
-  // Financial
-  "Loan Payments": {
-    keywords: ["cicilan", "loan", "kredit", "angsuran", "installment"],
-    subcategory: "Loan Payments"
-  },
-  "Credit Card Payments": {
-    keywords: ["kartu kredit", "credit card", "cc payment", "tagihan kartu kredit"],
-    subcategory: "Credit Card Payments"
-  },
-  "Taxes": {
-    keywords: ["pajak", "tax", "pph", "ppn", "e-billing"],
-    subcategory: "Taxes"
-  },
-  "Bank Fees": {
-    keywords: ["biaya admin", "admin fee", "bank fee", "transfer fee", "biaya transfer"],
-    subcategory: "Bank Fees"
-  },
-
-  // Travel
-  "Flights": {
-    keywords: ["pesawat", "flight", "airline", "garuda", "lion air", "airasia", "citilink", "tiket.com", "traveloka"],
-    subcategory: "Flights"
-  },
-  "Hotels": {
-    keywords: ["hotel", "penginapan", "homestay", "villa", "airbnb", "booking.com", "agoda"],
-    subcategory: "Hotels"
-  },
-
-  // Family & Gifts
-  "Gifts": {
-    keywords: ["gift", "hadiah", "kado", "parcel", "bingkisan"],
-    subcategory: "Gifts"
-  },
-  "Donations": {
-    keywords: ["donasi", "donation", "sedekah", "zakat", "infaq", "amal"],
-    subcategory: "Donations"
-  },
-  "Family Support": {
-    keywords: ["transfer ke", "kirim uang", "family", "keluarga", "ortu", "anak", "support"],
-    subcategory: "Family Support"
-  },
-
-  // Income categories
-  "Salary": {
-    keywords: ["gaji", "salary", "payroll", "upah", "tunjangan", "bonus", "THR"],
-    subcategory: "Salary"
-  },
-  "Freelance": {
-    keywords: ["freelance", "project", "konsultasi", "consulting", "jasa", "service", "client"],
-    subcategory: "Freelance"
-  },
-  "Investments": {
-    keywords: ["investasi", "saham", "stock", "reksadana", "mutual fund", "deposito", "dividend", "return", "bunga", "interest"],
-    subcategory: "Investments"
-  },
-  "Refunds": {
-    keywords: ["refund", "return", "cashback", "pengembalian", "retur"],
-    subcategory: "Refunds"
-  },
-};
-
-function detectCategory(description: string, type: string): { category: string; subcategory?: string } {
+function detectCategory(description: string, type: string): { category: string; subcategory?: string; parentCategory?: string } {
   const desc = description.toLowerCase();
 
   for (const [category, data] of Object.entries(CATEGORY_KEYWORDS)) {
     for (const keyword of data.keywords) {
-      if (desc.includes(keyword)) {
-        return { category, subcategory: data.subcategory };
+      if (keyword && desc.includes(keyword)) {
+        return { category, subcategory: data.subcategory, parentCategory: data.parent };
       }
     }
   }
 
-  return { category: type === "income" ? "Other Income" : "Other" };
+  return { category: type === "income" ? "Income" : "Miscellaneous" };
+}
+
+function resolveCategoryId(
+  categoryName: string,
+  subcategory: string | undefined,
+  parentCategory: string | undefined,
+  type: string,
+  categoryMap: Map<string, string>
+): string | undefined {
+  if (subcategory) {
+    if (parentCategory) {
+      const combined = categoryMap.get(`${parentCategory}:${subcategory}`);
+      if (combined) return combined;
+    }
+    const id = categoryMap.get(subcategory);
+    if (id) return id;
+  }
+  if (parentCategory) {
+    const id = categoryMap.get(parentCategory);
+    if (id) return id;
+  }
+  if (categoryName) {
+    const id = categoryMap.get(categoryName);
+    if (id) return id;
+  }
+  return categoryMap.get(type === "income" ? "Income" : "Miscellaneous");
 }
 
 function detectPaymentMethod(description: string): string {
@@ -242,6 +69,31 @@ function parseIndonesianDate(dateStr: string): Date {
     return new Date(year, month, day);
   }
   return new Date();
+}
+
+function parseAmount(amountStr: string): number {
+  const cleaned = amountStr.trim();
+
+  if (cleaned.includes(",")) {
+    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    return parseFloat(normalized);
+  }
+
+  const dotCount = (cleaned.match(/\./g) || []).length;
+
+  if (dotCount === 0) {
+    return parseFloat(cleaned);
+  }
+
+  if (dotCount === 1) {
+    const parts = cleaned.split(".");
+    if (parts[1].length === 3 && parts[0].length <= 3) {
+      return parseFloat(cleaned.replace(".", ""));
+    }
+    return parseFloat(cleaned);
+  }
+
+  return parseFloat(cleaned.replace(/\./g, ""));
 }
 
 function parseCSVRow(row: string): string[] {
@@ -339,8 +191,7 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
     const summaryKeywords = ["saldo awal", "total pemasukan", "total pengeluaran", "saldo akhir", "initial balance", "ending balance"];
     if (summaryKeywords.some((kw) => lines[i].toLowerCase().includes(kw))) continue;
 
-    const cleanAmount = amountStr.replace(/[.\s]/g, "").replace(",", ".");
-    const amount = parseFloat(cleanAmount);
+    const amount = parseAmount(amountStr);
 
     if (isNaN(amount)) continue;
 
@@ -358,8 +209,8 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
 
     const absAmount = Math.abs(amount);
     const date = dateStr ? parseIndonesianDate(dateStr) : new Date();
-    const { category: categoryName, subcategory } = detectCategory(description, type);
-    const categoryId = categoryMap.get(subcategory || categoryName) || categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
+    const { category: categoryName, subcategory, parentCategory } = detectCategory(description, type);
+    const categoryId = resolveCategoryId(categoryName, subcategory, parentCategory, type, categoryMap);
     const paymentMethod = detectPaymentMethod(description);
 
     if (!categoryId) {
@@ -374,7 +225,7 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
       date,
       categoryId,
       paymentMethod,
-      notes: subcategory ? `${categoryName} > ${subcategory}` : categoryName,
+      notes: subcategory ? `${parentCategory || categoryName} > ${subcategory}` : categoryName,
     });
   }
 
@@ -448,8 +299,7 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
 
     if (!amountStr) continue;
 
-    const cleanAmount = amountStr.replace(/[.\s]/g, "").replace(",", ".");
-    const amount = parseFloat(cleanAmount);
+    const amount = parseAmount(amountStr);
 
     if (isNaN(amount)) continue;
 
@@ -466,8 +316,8 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
     }
 
     const absAmount = Math.abs(amount);
-    const { category: categoryName, subcategory } = detectCategory(description, type);
-    const categoryId = categoryMap.get(subcategory || categoryName) || categoryMap.get(categoryName) || categoryMap.get(type === "income" ? "Other Income" : "Other");
+    const { category: categoryName, subcategory, parentCategory } = detectCategory(description, type);
+    const categoryId = resolveCategoryId(categoryName, subcategory, parentCategory, type, categoryMap);
     const paymentMethod = detectPaymentMethod(description);
 
     if (!categoryId) {
@@ -482,7 +332,7 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
       date,
       categoryId,
       paymentMethod,
-      notes: subcategory ? `${categoryName} > ${subcategory}` : categoryName,
+      notes: subcategory ? `${parentCategory || categoryName} > ${subcategory}` : categoryName,
     });
   }
 
@@ -527,7 +377,16 @@ export async function POST(req: Request) {
     for (const cat of allCategories) {
       categoryMap.set(cat.name, cat.id);
     }
+    for (const cat of allCategories) {
+      if (cat.parentId) {
+        const parent = allCategories.find((p) => p.id === cat.parentId);
+        if (parent) {
+          categoryMap.set(`${parent.name}:${cat.name}`, cat.id);
+        }
+      }
+    }
 
+    const userId = session.user.id;
     let totalCreated = 0;
     const allErrors: string[] = [];
     let detectedCurrency = "USD";
@@ -556,7 +415,7 @@ export async function POST(req: Request) {
       if (isCSV) {
         const text = await file.text();
         detectedCurrency = detectCurrency(text);
-        const result = parseCSV(text, session.user.id, categoryMap);
+        const result = parseCSV(text, userId, categoryMap);
         transactions = result.transactions;
         errors = result.errors;
       } else {
@@ -564,7 +423,7 @@ export async function POST(req: Request) {
         const buffer = Buffer.from(arrayBuffer);
         const text = await parsePDF(buffer);
         detectedCurrency = detectCurrency(text);
-        const result = parsePDFText(text, session.user.id, categoryMap);
+        const result = parsePDFText(text, userId, categoryMap);
         transactions = result.transactions;
         errors = result.errors;
       }
@@ -573,7 +432,7 @@ export async function POST(req: Request) {
         const created = await prisma.transaction.createMany({
           data: transactions.map((t) => ({
             ...t,
-            userId: session.user.id,
+            userId,
           })),
         });
         totalCreated += created.count;

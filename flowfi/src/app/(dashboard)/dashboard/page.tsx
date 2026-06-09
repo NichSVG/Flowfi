@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -9,6 +9,9 @@ import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,16 +39,38 @@ interface Transaction {
   category: { name: string; color: string | null } | null;
 }
 
+interface CategoryTransaction {
+  id: string;
+  amount: number;
+  description: string | null;
+  date: string;
+  paymentMethod: string | null;
+}
+
+interface SpendingCategory {
+  name: string;
+  value: number;
+  color: string;
+  categoryId: string;
+  transactionCount: number;
+  transactions: CategoryTransaction[];
+}
+
 interface DashboardData {
   balance: number;
   monthlyIncome: number;
   monthlyExpenses: number;
   savingsRate: number;
   recentTransactions: Transaction[];
-  spendingByCategory: { name: string; value: number; color: string }[];
+  spendingByCategory: SpendingCategory[];
   monthlyTrend: { month: string; income: number; expenses: number }[];
   budgets: { name: string; budget: number; spent: number; color: string }[];
   goals: { name: string; target: number; current: number; progress: number; color: string }[];
+  currentMonth: string;
+  currentMonthKey: string;
+  availableMonths: string[];
+  hasPrevMonth: boolean;
+  hasNextMonth: boolean;
 }
 
 const emptyData: DashboardData = {
@@ -58,29 +83,60 @@ const emptyData: DashboardData = {
   monthlyTrend: [],
   budgets: [],
   goals: [],
+  currentMonth: "",
+  currentMonthKey: "",
+  availableMonths: [],
+  hasPrevMonth: false,
+  hasNextMonth: false,
 };
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
   const { format } = useCurrency();
 
+  const fetchDashboard = useCallback(async (month?: string) => {
+    setLoading(true);
+    try {
+      const url = month ? `/api/dashboard?month=${month}` : "/api/dashboard";
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+        setSelectedMonth(json.currentMonthKey);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    async function fetchDashboard() {
-      try {
-        const res = await fetch("/api/dashboard");
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  const goToPrevMonth = () => {
+    if (data.hasPrevMonth && data.availableMonths.length > 0) {
+      const currentIndex = data.availableMonths.indexOf(data.currentMonthKey);
+      if (currentIndex > 0) {
+        const prevMonth = data.availableMonths[currentIndex - 1];
+        fetchDashboard(prevMonth);
       }
     }
-    fetchDashboard();
-  }, []);
+  };
+
+  const goToNextMonth = () => {
+    if (data.hasNextMonth && data.availableMonths.length > 0) {
+      const currentIndex = data.availableMonths.indexOf(data.currentMonthKey);
+      if (currentIndex < data.availableMonths.length - 1) {
+        const nextMonth = data.availableMonths[currentIndex + 1];
+        fetchDashboard(nextMonth);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -95,7 +151,27 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here&apos;s your financial overview.</p>
+          <div className="flex items-center gap-2 mt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToPrevMonth}
+              disabled={!data.hasPrevMonth}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-muted-foreground font-medium">
+              {data.currentMonth || "No data"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToNextMonth}
+              disabled={!data.hasNextMonth}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <Link href="/transactions">
           <Button>
@@ -157,7 +233,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Savings Rate</p>
-                <p className="text-2xl font-bold">{data.savingsRate}%</p>
+                <p className="text-2xl font-bold">{data.savingsRate.toFixed(1)}%</p>
               </div>
               <div className="rounded-full bg-warning/10 p-3">
                 <PiggyBank className="h-5 w-5 text-warning" />
@@ -168,46 +244,109 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card variant="bordered">
+        <Card variant="bordered" className={selectedCategoryName ? "lg:col-span-2" : ""}>
           <CardHeader>
-            <CardTitle>Spending by Category</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Spending by Category</CardTitle>
+              {selectedCategoryName && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCategoryName(null)}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {data.spendingByCategory.length === 0 ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No spending data yet. Add transactions to see charts.
+                No spending data this month
               </div>
             ) : (
-              <>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={data.spendingByCategory}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
+              <div className="grid gap-6" style={{ gridTemplateColumns: selectedCategoryName ? "1fr 1fr" : "1fr" }}>
+                <div>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={data.spendingByCategory}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={5}
+                          dataKey="value"
+                          cursor="pointer"
+                          onClick={(entry) => setSelectedCategoryName(entry.name === selectedCategoryName ? null : entry.name)}
+                        >
+                          {data.spendingByCategory.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              opacity={!selectedCategoryName || selectedCategoryName === entry.name ? 1 : 0.3}
+                              stroke={selectedCategoryName === entry.name ? "#fff" : "transparent"}
+                              strokeWidth={selectedCategoryName === entry.name ? 2 : 0}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => format(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    {data.spendingByCategory.map((category) => (
+                      <button
+                        key={category.name}
+                        onClick={() => setSelectedCategoryName(selectedCategoryName === category.name ? null : category.name)}
+                        className={`flex items-center gap-2 rounded-lg p-2 text-left transition-colors hover:bg-accent ${
+                          selectedCategoryName === category.name ? "bg-accent ring-1 ring-border" : ""
+                        }`}
                       >
-                        {data.spendingByCategory.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => format(value)} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: category.color }} />
+                        <span className="text-xs text-muted-foreground truncate">{category.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  {data.spendingByCategory.map((category) => (
-                    <div key={category.name} className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
-                      <span className="text-xs text-muted-foreground">{category.name}</span>
+
+                {selectedCategoryName && (() => {
+                  const cat = data.spendingByCategory.find(c => c.name === selectedCategoryName);
+                  if (!cat || cat.transactions.length === 0) {
+                    return (
+                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                        No transactions in this category
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="h-[350px] overflow-y-auto space-y-2 pr-2">
+                      <p className="text-sm font-medium text-muted-foreground mb-3">
+                        {cat.name} — {format(cat.value)}
+                      </p>
+                      {cat.transactions.map((t) => (
+                        <div
+                          key={t.id}
+                          className="flex items-center justify-between rounded-lg border border-border p-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{t.description || "Transaction"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(t.date).toLocaleDateString()}
+                              {t.paymentMethod ? ` • ${t.paymentMethod}` : ""}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-destructive ml-4 shrink-0">
+                            -{format(t.amount)}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </>
+                  );
+                })()}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -334,7 +473,7 @@ export default function DashboardPage() {
         <CardContent>
           {data.recentTransactions.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
-              No transactions yet. Start by adding one or importing a bank statement.
+              No transactions this month
             </div>
           ) : (
             <div className="space-y-4">

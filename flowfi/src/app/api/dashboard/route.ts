@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -10,19 +10,45 @@ export async function GET() {
     }
 
     const userId = session.user.id;
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const { searchParams } = new URL(req.url);
+    const monthParam = searchParams.get("month");
+
+    // Get all available months with transactions
+    const transactions = await prisma.transaction.findMany({
+      where: { userId },
+      select: { date: true },
+      orderBy: { date: "asc" },
+    });
+
+    const availableMonths = new Set<string>();
+    transactions.forEach((t) => {
+      const d = new Date(t.date);
+      availableMonths.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    });
+
+    const monthsList = Array.from(availableMonths).sort();
+
+    // Determine target month
+    let targetDate: Date;
+    if (monthParam && availableMonths.has(monthParam)) {
+      const [year, month] = monthParam.split("-").map(Number);
+      targetDate = new Date(year, month - 1, 1);
+    } else if (monthsList.length > 0) {
+      const [year, month] = monthsList[monthsList.length - 1].split("-").map(Number);
+      targetDate = new Date(year, month - 1, 1);
+    } else {
+      targetDate = new Date();
+    }
+
+    const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
 
     // Get monthly income
     const incomeResult = await prisma.transaction.aggregate({
       where: {
         userId,
         type: "income",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
+        date: { gte: startOfMonth, lte: endOfMonth },
       },
       _sum: { amount: true },
     });
@@ -32,10 +58,7 @@ export async function GET() {
       where: {
         userId,
         type: "expense",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
+        date: { gte: startOfMonth, lte: endOfMonth },
       },
       _sum: { amount: true },
     });
@@ -64,10 +87,7 @@ export async function GET() {
       where: {
         userId,
         type: "expense",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
+        date: { gte: startOfMonth, lte: endOfMonth },
       },
       _sum: { amount: true },
     });
@@ -78,28 +98,56 @@ export async function GET() {
       },
     });
 
+    // Get transactions for each category
+    const allMonthTransactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+        type: "expense",
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
+      include: { category: true },
+      orderBy: { date: "desc" },
+    });
+
     const categorySpending = spendingByCategory.map((item) => {
       const category = categories.find((c) => c.id === item.categoryId);
+      const catId = item.categoryId;
+      const catTransactions = allMonthTransactions
+        .filter((t) => t.categoryId === catId)
+        .slice(0, 20)
+        .map((t) => ({
+          id: t.id,
+          amount: Number(t.amount),
+          description: t.description,
+          date: t.date,
+          paymentMethod: t.paymentMethod,
+        }));
       return {
         name: category?.name || "Unknown",
         value: Number(item._sum.amount) || 0,
         color: category?.color || "#6b7280",
+        categoryId: catId,
+        transactionCount: catTransactions.length,
+        transactions: catTransactions,
       };
     });
 
-    // Get recent transactions
+    // Get recent transactions for the month
     const recentTransactions = await prisma.transaction.findMany({
-      where: { userId },
+      where: {
+        userId,
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
       include: { category: true },
       orderBy: { date: "desc" },
       take: 5,
     });
 
-    // Get monthly trend (last 6 months)
+    // Get monthly trend (last 6 months from target month)
     const monthlyTrend = [];
     for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() - i, 1);
+      const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() - i + 1, 0);
 
       const [monthIncome, monthExpense] = await Promise.all([
         prisma.transaction.aggregate({
@@ -140,7 +188,7 @@ export async function GET() {
             userId,
             categoryId: budget.categoryId,
             type: "expense",
-            date: { gte: budget.startDate, lte: now },
+            date: { gte: startOfMonth, lte: endOfMonth },
           },
           _sum: { amount: true },
         });
@@ -170,6 +218,9 @@ export async function GET() {
       color: goal.color || "#6366f1",
     }));
 
+    const currentMonthKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthIndex = monthsList.indexOf(currentMonthKey);
+
     return NextResponse.json({
       balance,
       monthlyIncome,
@@ -180,6 +231,11 @@ export async function GET() {
       monthlyTrend,
       budgets: budgetSummaries,
       goals: goalSummaries,
+      currentMonth: targetDate.toLocaleString("default", { month: "long", year: "numeric" }),
+      currentMonthKey,
+      availableMonths: monthsList,
+      hasPrevMonth: currentMonthIndex > 0,
+      hasNextMonth: currentMonthIndex < monthsList.length - 1,
     });
   } catch (error) {
     console.error("Error fetching dashboard data:", error);

@@ -19,6 +19,16 @@ interface Goal {
   status: string;
 }
 
+interface GoalsResponse {
+  goals: Goal[];
+  summary: {
+    totalSaved: number;
+    totalGoalTarget: number;
+    totalGoalCurrent: number;
+    unallocatedSavings: number;
+  };
+}
+
 export default function GoalsPage() {
   const { format } = useCurrency();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -26,6 +36,12 @@ export default function GoalsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addingFundsGoal, setAddingFundsGoal] = useState<Goal | null>(null);
   const [addAmount, setAddAmount] = useState("");
+  const [savingsSummary, setSavingsSummary] = useState({
+    totalSaved: 0,
+    totalGoalTarget: 0,
+    totalGoalCurrent: 0,
+    unallocatedSavings: 0,
+  });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -42,8 +58,14 @@ export default function GoalsPage() {
     try {
       const res = await fetch("/api/goals");
       if (res.ok) {
-        const data = await res.json();
-        setGoals(Array.isArray(data) ? data : []);
+        const data: GoalsResponse = await res.json();
+        setGoals(Array.isArray(data.goals) ? data.goals : []);
+        setSavingsSummary(data.summary || {
+          totalSaved: 0,
+          totalGoalTarget: 0,
+          totalGoalCurrent: 0,
+          unallocatedSavings: 0,
+        });
       }
     } catch (error) {
       console.error("Failed to fetch goals:", error);
@@ -151,17 +173,21 @@ export default function GoalsPage() {
 
       <Card variant="bordered">
         <CardContent className="pt-6">
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">Total Target</p>
-              <p className="text-2xl font-bold">{format(totalTarget)}</p>
+              <p className="text-sm text-muted-foreground">Total Saved (from transactions)</p>
+              <p className="text-2xl font-bold text-success">{format(savingsSummary.totalSaved)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Saved</p>
-              <p className="text-2xl font-bold text-success">{format(totalSaved)}</p>
+              <p className="text-sm text-muted-foreground">Allocated to Goals</p>
+              <p className="text-2xl font-bold">{format(totalSaved)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Overall Progress</p>
+              <p className="text-sm text-muted-foreground">Unallocated Savings</p>
+              <p className="text-2xl font-bold text-primary">{format(savingsSummary.unallocatedSavings)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Overall Goal Progress</p>
               <p className="text-2xl font-bold">{overallProgress.toFixed(1)}%</p>
             </div>
           </div>

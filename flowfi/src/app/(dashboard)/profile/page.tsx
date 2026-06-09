@@ -18,6 +18,13 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     fetchUserData();
@@ -38,6 +45,55 @@ export default function ProfilePage() {
       setLoading(false);
     }
   }
+
+  const handleChangePassword = async () => {
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPasswordError(data.error || "Failed to change password");
+        return;
+      }
+
+      setPasswordSuccess("Password changed successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setPasswordSuccess("");
+      }, 1500);
+    } catch {
+      setPasswordError("An error occurred. Please try again.");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -190,7 +246,7 @@ export default function ProfilePage() {
                       <p className="text-sm text-muted-foreground">Manage your password</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => setShowPasswordModal(true)}>
                     Change
                   </Button>
                 </div>
@@ -303,6 +359,75 @@ export default function ProfilePage() {
                 loading={deleting}
               >
                 Delete Forever
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+            <h2 className="text-lg font-semibold mb-2">Change Password</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Enter your current password and a new password.
+            </p>
+
+            {passwordError && (
+              <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="mb-4 rounded-lg bg-green-500/10 p-3 text-sm text-green-600">
+                {passwordSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <Input
+                label="Current Password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+              <Input
+                label="New Password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <Input
+                label="Confirm New Password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordError("");
+                  setPasswordSuccess("");
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }}
+                disabled={changingPassword}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleChangePassword}
+                loading={changingPassword}
+              >
+                Update Password
               </Button>
             </div>
           </div>

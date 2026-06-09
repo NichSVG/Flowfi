@@ -9,12 +9,37 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
     const goals = await prisma.goal.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(goals);
+    // Calculate total savings from transactions
+    const totalIncome = await prisma.transaction.aggregate({
+      where: { userId, type: "income" },
+      _sum: { amount: true },
+    });
+
+    const totalExpenses = await prisma.transaction.aggregate({
+      where: { userId, type: "expense" },
+      _sum: { amount: true },
+    });
+
+    const totalSaved = Number(totalIncome._sum.amount || 0) - Number(totalExpenses._sum.amount || 0);
+    const totalGoalTarget = goals.reduce((sum, g) => sum + Number(g.targetAmount), 0);
+    const totalGoalCurrent = goals.reduce((sum, g) => sum + Number(g.currentAmount), 0);
+
+    return NextResponse.json({
+      goals,
+      summary: {
+        totalSaved: Math.max(0, totalSaved),
+        totalGoalTarget,
+        totalGoalCurrent,
+        unallocatedSavings: Math.max(0, totalSaved - totalGoalCurrent),
+      },
+    });
   } catch (error) {
     console.error("Error fetching goals:", error);
     return NextResponse.json(

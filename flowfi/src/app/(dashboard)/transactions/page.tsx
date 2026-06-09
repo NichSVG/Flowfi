@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { CATEGORY_KEYWORDS } from "@/lib/category-keywords";
 import {
   Plus,
   Search,
@@ -13,6 +14,8 @@ import {
   Upload,
   FileText,
   CheckCircle,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +38,7 @@ interface Transaction {
   description: string | null;
   date: string;
   paymentMethod: string | null;
+  categoryId: string;
   category: { name: string; color: string | null } | null;
 }
 
@@ -53,6 +57,28 @@ export default function TransactionsPage() {
   const [uploadResult, setUploadResult] = useState<{ message: string; count: number; errors?: string[] } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkCategoryModal, setShowBulkCategoryModal] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewSourceCategory, setReviewSourceCategory] = useState("Miscellaneous");
+  const [reviewUpdating, setReviewUpdating] = useState<string | null>(null);
+  const [reviewCategorySearch, setReviewCategorySearch] = useState("");
+  const [showReviewCategoryDropdown, setShowReviewCategoryDropdown] = useState(false);
+  const [reviewTargetId, setReviewTargetId] = useState<Record<string, string>>({});
+
+  const [detectedPatterns, setDetectedPatterns] = useState<{
+    pattern: string;
+    suggestedCategoryId: string;
+    suggestedCategoryName: string;
+    transactionIds: string[];
+    count: number;
+  }[]>([]);
+  const [showPatternResults, setShowPatternResults] = useState(false);
+  const [confirmingPattern, setConfirmingPattern] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     description: "",
     amount: "",
@@ -68,6 +94,39 @@ export default function TransactionsPage() {
     color: "#6366f1",
     type: "expense" as "income" | "expense",
   });
+
+  const [categorySearch, setCategorySearch] = useState("");
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showInlineCategoryInput, setShowInlineCategoryInput] = useState(false);
+  const [inlineCategoryName, setInlineCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [bulkCategorySearch, setBulkCategorySearch] = useState("");
+  const [showBulkCategoryDropdown, setShowBulkCategoryDropdown] = useState(false);
+
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setShowCategoryDropdown(false);
+        setShowInlineCategoryInput(false);
+        setInlineCategoryName("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-review-dropdown]")) {
+        setShowReviewCategoryDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -105,9 +164,90 @@ export default function TransactionsPage() {
     return matchesSearch && matchesCategory && matchesType;
   });
 
-  const getCategoryColor = (categoryName: string) => {
-    const cat = categories.find((c) => c.name === categoryName);
-    return cat?.color || "#6b7280";
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTransactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredTransactions.map((t) => t.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} transaction(s)?`)) return;
+
+    setBulkProcessing(true);
+    try {
+      const res = await fetch("/api/transactions/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+
+      if (res.ok) {
+        setTransactions(transactions.filter((t) => !selectedIds.has(t.id)));
+        setSelectedIds(new Set());
+      }
+    } catch (error) {
+      console.error("Failed to delete transactions:", error);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkCategoryChange = async () => {
+    if (selectedIds.size === 0 || !bulkCategoryId) return;
+
+    setBulkProcessing(true);
+    try {
+      const res = await fetch("/api/transactions/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          categoryId: bulkCategoryId,
+        }),
+      });
+
+      if (res.ok) {
+        const cat = categories.find((c) => c.id === bulkCategoryId);
+        setTransactions(
+          transactions.map((t) => {
+            if (selectedIds.has(t.id)) {
+              return {
+                ...t,
+                categoryId: bulkCategoryId,
+                category: cat ? { name: cat.name, color: cat.color } : t.category,
+              };
+            }
+            return t;
+          })
+        );
+        setSelectedIds(new Set());
+        setShowBulkCategoryModal(false);
+        setBulkCategoryId("");
+      }
+    } catch (error) {
+      console.error("Failed to update transactions:", error);
+    } finally {
+      setBulkProcessing(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -128,6 +268,34 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error("Failed to add category:", error);
+    }
+  };
+
+  const handleCreateInlineCategory = async () => {
+    const name = inlineCategoryName.trim();
+    if (!name) return;
+
+    setCreatingCategory(true);
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type: formData.type, color: "#6366f1" }),
+      });
+
+      if (res.ok) {
+        const cat = await res.json();
+        setCategories([...categories, cat]);
+        setFormData({ ...formData, categoryId: cat.id });
+        setInlineCategoryName("");
+        setShowInlineCategoryInput(false);
+        setCategorySearch("");
+        setShowCategoryDropdown(false);
+      }
+    } catch (error) {
+      console.error("Failed to create category:", error);
+    } finally {
+      setCreatingCategory(false);
     }
   };
 
@@ -188,6 +356,110 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleReviewCategoryChange = async (transactionId: string, newCategoryId: string) => {
+    setReviewUpdating(transactionId);
+    try {
+      const res = await fetch(`/api/transactions/${transactionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId: newCategoryId }),
+      });
+      if (res.ok) {
+        setTransactions(prev => prev.map(t =>
+          t.id === transactionId ? { ...t, categoryId: newCategoryId } : t
+        ));
+      }
+    } catch (e) {
+      console.error("Error updating transaction:", e);
+    } finally {
+      setReviewUpdating(null);
+    }
+  };
+
+  const handleDetectPatterns = () => {
+    const sourceCats = categories.filter(c => c.name === reviewSourceCategory);
+    const sourceIds = sourceCats.flatMap(sc => {
+      if (!sc.parentId) {
+        return [sc.id, ...categories.filter(c => c.parentId === sc.id).map(c => c.id)];
+      }
+      return [sc.id];
+    });
+    const reviewTransactions = transactions.filter(t => sourceIds.includes(t.categoryId));
+
+    const groups: Record<string, typeof reviewTransactions> = {};
+    for (const t of reviewTransactions) {
+      const desc = (t.description || "").toUpperCase().replace(/[^A-Z\s]/g, "").trim();
+      const words = desc.split(/\s+/).filter(w => w.length > 2);
+      const key = words[0] || desc;
+      if (!key) continue;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    }
+
+    const patterns: typeof detectedPatterns = [];
+    for (const [pattern, txns] of Object.entries(groups)) {
+      if (txns.length < 2) continue;
+      const descLower = txns[0].description?.toLowerCase() || "";
+      let suggested: { id: string; name: string } | null = null;
+      for (const [, data] of Object.entries(CATEGORY_KEYWORDS)) {
+        for (const kw of data.keywords) {
+          if (descLower.includes(kw)) {
+            const cat = categories.find(c => {
+              if (data.subcategory && c.name === data.subcategory) {
+                if (data.parent) {
+                  const parent = categories.find(p => p.id === c.parentId);
+                  return parent?.name === data.parent;
+                }
+                return !c.parentId;
+              }
+              return false;
+            });
+            if (cat) { suggested = { id: cat.id, name: cat.name }; break; }
+          }
+        }
+        if (suggested) break;
+      }
+      if (suggested) {
+        patterns.push({
+          pattern,
+          suggestedCategoryId: suggested.id,
+          suggestedCategoryName: suggested.name,
+          transactionIds: txns.map(t => t.id),
+          count: txns.length,
+        });
+      }
+    }
+
+    patterns.sort((a, b) => b.count - a.count);
+    setDetectedPatterns(patterns);
+    setShowPatternResults(true);
+  };
+
+  const handleApplyPattern = async (patternIndex: number) => {
+    const pattern = detectedPatterns[patternIndex];
+    if (!pattern) return;
+    setConfirmingPattern(patternIndex);
+    try {
+      await Promise.all(pattern.transactionIds.map(id =>
+        fetch(`/api/transactions/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryId: pattern.suggestedCategoryId }),
+        })
+      ));
+      setTransactions(prev => prev.map(t =>
+        pattern.transactionIds.includes(t.id)
+          ? { ...t, categoryId: pattern.suggestedCategoryId }
+          : t
+      ));
+      setDetectedPatterns(prev => prev.filter((_, i) => i !== patternIndex));
+    } catch (e) {
+      console.error("Error applying pattern:", e);
+    } finally {
+      setConfirmingPattern(null);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       description: "",
@@ -205,7 +477,7 @@ export default function TransactionsPage() {
     setFormData({
       description: transaction.description || "",
       amount: transaction.amount.toString(),
-      categoryId: "",
+      categoryId: transaction.categoryId || "",
       type: transaction.type as "income" | "expense",
       date: new Date(transaction.date).toISOString().split("T")[0],
       paymentMethod: transaction.paymentMethod || "Credit Card",
@@ -281,12 +553,53 @@ export default function TransactionsPage() {
             <Tag className="mr-2 h-4 w-4" />
             Categories
           </Button>
+          <Button variant="outline" onClick={() => { setReviewSourceCategory("Miscellaneous"); setShowReviewModal(true); }}>
+            <Search className="mr-2 h-4 w-4" />
+            Review
+          </Button>
           <Button onClick={() => setShowAddModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Transaction
           </Button>
         </div>
       </div>
+
+      {selectedIds.size > 0 && (
+        <Card variant="bordered" className="border-primary/50 bg-primary/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium">
+                  {selectedIds.size} selected
+                </span>
+                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                  Clear
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBulkCategoryModal(true)}
+                  disabled={bulkProcessing}
+                >
+                  <Tag className="mr-2 h-4 w-4" />
+                  Change Category
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={bulkProcessing}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card variant="bordered">
         <CardContent className="pt-6">
@@ -348,67 +661,96 @@ export default function TransactionsPage() {
                 No transactions yet. Add one or import a bank statement.
               </div>
             ) : (
-              filteredTransactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`rounded-full p-2 ${
-                        transaction.type === "income" ? "bg-success/10" : "bg-destructive/10"
-                      }`}
-                    >
-                      {transaction.type === "income" ? (
-                        <ArrowUpRight className="h-4 w-4 text-success" />
-                      ) : (
-                        <ArrowDownRight className="h-4 w-4 text-destructive" />
-                      )}
+              <>
+                <div className="flex items-center gap-3 rounded-lg border border-border p-3 bg-muted/30">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {selectedIds.size === filteredTransactions.length ? (
+                      <CheckSquare className="h-5 w-5" />
+                    ) : (
+                      <Square className="h-5 w-5" />
+                    )}
+                  </button>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.size === filteredTransactions.length ? "Deselect all" : "Select all"}
+                  </span>
+                </div>
+
+                {filteredTransactions.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className={`flex items-center justify-between rounded-lg border p-4 hover:bg-accent/50 transition-colors ${
+                      selectedIds.has(transaction.id) ? "border-primary/50 bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => toggleSelect(transaction.id)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        {selectedIds.has(transaction.id) ? (
+                          <CheckSquare className="h-5 w-5 text-primary" />
+                        ) : (
+                          <Square className="h-5 w-5" />
+                        )}
+                      </button>
+                      <div
+                        className={`rounded-full p-2 ${
+                          transaction.type === "income" ? "bg-success/10" : "bg-destructive/10"
+                        }`}
+                      >
+                        {transaction.type === "income" ? (
+                          <ArrowUpRight className="h-4 w-4 text-success" />
+                        ) : (
+                          <ArrowDownRight className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">{transaction.description || "Transaction"}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: transaction.category?.color || "#6b7280" }}
+                          />
+                          {transaction.category?.name || "Uncategorized"} • {new Date(transaction.date).toLocaleDateString()}
+                          {transaction.paymentMethod && ` • ${transaction.paymentMethod}`}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{transaction.description || "Transaction"}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: transaction.category?.color || "#6b7280" }}
-                        />
-                        {transaction.category?.name || "Uncategorized"} • {new Date(transaction.date).toLocaleDateString()}
-                        {transaction.paymentMethod && ` • ${transaction.paymentMethod}`}
+                    <div className="flex items-center gap-4">
+                      <p
+                        className={`font-semibold ${
+                          transaction.type === "income" ? "text-success" : "text-destructive"
+                        }`}
+                      >
+                        {transaction.type === "income" ? "+" : "-"}
+                        {format(transaction.amount)}
+                      </p>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEditModal(transaction)}
+                          className="rounded p-1 hover:bg-accent"
+                        >
+                          <Edit2 className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTransaction(transaction.id)}
+                          className="rounded p-1 hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <p
-                      className={`font-semibold ${
-                        transaction.type === "income" ? "text-success" : "text-destructive"
-                      }`}
-                    >
-                      {transaction.type === "income" ? "+" : "-"}
-                      {format(transaction.amount)}
-                    </p>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => openEditModal(transaction)}
-                        className="rounded p-1 hover:bg-accent"
-                      >
-                        <Edit2 className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTransaction(transaction.id)}
-                        className="rounded p-1 hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
+                ))}
+              </>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Add/Edit Transaction Modal */}
       {(showAddModal || editingTransaction) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
@@ -470,30 +812,161 @@ export default function TransactionsPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium">Category</label>
-                <select
-                  value={formData.categoryId}
-                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
-                >
-                  <option value="">Select category</option>
-                  {categories
-                    .filter((c) => c.parentId === null && (formData.type === "income" ? c.type === "income" : c.type === "expense"))
-                    .map((parent) => {
-                      const children = categories.filter((c) => c.parentId === parent.id);
-                      if (children.length === 0) {
-                        return (
-                          <option key={parent.id} value={parent.id}>{parent.name}</option>
-                        );
+                <div className="relative" ref={categoryDropdownRef}>
+                  <input
+                    type="text"
+                    placeholder="Search categories..."
+                    value={categorySearch || (formData.categoryId ? categories.find(c => c.id === formData.categoryId)?.name || "" : "")}
+                    onChange={(e) => {
+                      setCategorySearch(e.target.value);
+                      setShowCategoryDropdown(true);
+                      if (!e.target.value) {
+                        setFormData({ ...formData, categoryId: "" });
                       }
-                      return (
-                        <optgroup key={parent.id} label={parent.name}>
-                          {children.map((child) => (
-                            <option key={child.id} value={child.id}>{child.name}</option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                </select>
+                    }}
+                    onFocus={() => {
+                      setShowCategoryDropdown(true);
+                      setCategorySearch("");
+                    }}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  {showCategoryDropdown && (
+                    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
+                      {(() => {
+                        const q = categorySearch.toLowerCase();
+                        const filtered = categories
+                          .filter((c) => {
+                            if (formData.type === "income" ? c.type !== "income" : c.type !== "expense") return false;
+                            if (!q) return true;
+                            return c.name.toLowerCase().includes(q);
+                          });
+
+                        const parents = filtered.filter((c) => c.parentId === null);
+                        const results: React.ReactNode[] = [];
+
+                        for (const parent of parents) {
+                          const children = filtered.filter((c) => c.parentId === parent.id);
+                          const parentMatches = parent.name.toLowerCase().includes(q);
+
+                          if (parentMatches && !q) {
+                            results.push(
+                              <button
+                                key={parent.id}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setFormData({ ...formData, categoryId: parent.id });
+                                  setCategorySearch("");
+                                  setShowCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-semibold text-muted-foreground hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: parent.color || "#6b7280" }} />
+                                {parent.name}
+                              </button>
+                            );
+                          }
+
+                          for (const child of children) {
+                            results.push(
+                              <button
+                                key={child.id}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setFormData({ ...formData, categoryId: child.id });
+                                  setCategorySearch("");
+                                  setShowCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: child.color || parent.color || "#6b7280" }} />
+                                <span>{child.name}</span>
+                                <span className="ml-auto text-xs text-muted-foreground">{parent.name}</span>
+                              </button>
+                            );
+                          }
+
+                          if (parentMatches && q && children.length > 0) {
+                            results.push(
+                              <button
+                                key={parent.id + "-self"}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setFormData({ ...formData, categoryId: parent.id });
+                                  setCategorySearch("");
+                                  setShowCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-6 py-2 text-left text-sm hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: parent.color || "#6b7280" }} />
+                                <span>{parent.name}</span>
+                                <span className="ml-auto text-xs text-muted-foreground">parent</span>
+                              </button>
+                            );
+                          }
+                        }
+
+                        if (results.length === 0 && !showInlineCategoryInput) {
+                          return (
+                            <>
+                              <div className="px-4 py-3 text-sm text-muted-foreground">No categories found</div>
+                              <button
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setShowInlineCategoryInput(true)}
+                                className="flex w-full items-center gap-2 border-t border-border px-4 py-2 text-left text-sm text-primary hover:bg-accent"
+                              >
+                                <span className="text-lg leading-none">+</span>
+                                Create "{categorySearch}"
+                              </button>
+                            </>
+                          );
+                        }
+
+                        return (
+                          <>
+                            {results}
+                            {showInlineCategoryInput ? (
+                              <div className="border-t border-border p-3">
+                                <input
+                                  type="text"
+                                  placeholder="New category name"
+                                  value={inlineCategoryName}
+                                  onChange={(e) => setInlineCategoryName(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateInlineCategory(); }}
+                                  className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm mb-2 focus:border-primary focus:outline-none"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { setShowInlineCategoryInput(false); setInlineCategoryName(""); }}
+                                    className="flex-1 rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleCreateInlineCategory}
+                                    disabled={!inlineCategoryName.trim() || creatingCategory}
+                                    className="flex-1 rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                  >
+                                    {creatingCategory ? "Creating..." : "Create"}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => setShowInlineCategoryInput(true)}
+                                className="flex w-full items-center gap-2 border-t border-border px-4 py-2 text-left text-sm text-primary hover:bg-accent"
+                              >
+                                <span className="text-lg leading-none">+</span>
+                                Create category
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <Input
@@ -545,7 +1018,153 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Category Management Modal */}
+      {showBulkCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Change Category</h2>
+              <button
+                onClick={() => {
+                  setShowBulkCategoryModal(false);
+                  setBulkCategoryId("");
+                }}
+                className="rounded p-1 hover:bg-accent"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-muted-foreground">
+              Change category for {selectedIds.size} selected transaction(s)
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">New Category</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search categories..."
+                    value={bulkCategorySearch || (bulkCategoryId ? categories.find(c => c.id === bulkCategoryId)?.name || "" : "")}
+                    onChange={(e) => {
+                      setBulkCategorySearch(e.target.value);
+                      setShowBulkCategoryDropdown(true);
+                      if (!e.target.value) {
+                        setBulkCategoryId("");
+                      }
+                    }}
+                    onFocus={() => {
+                      setShowBulkCategoryDropdown(true);
+                      setBulkCategorySearch("");
+                    }}
+                    onBlur={() => setTimeout(() => setShowBulkCategoryDropdown(false), 200)}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  {showBulkCategoryDropdown && (
+                    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
+                      {(() => {
+                        const q = bulkCategorySearch.toLowerCase();
+                        const filtered = categories.filter((c) => !q || c.name.toLowerCase().includes(q));
+
+                        const parents = filtered.filter((c) => c.parentId === null);
+                        const results: React.ReactNode[] = [];
+
+                        for (const parent of parents) {
+                          const children = filtered.filter((c) => c.parentId === parent.id);
+                          const parentMatches = parent.name.toLowerCase().includes(q);
+
+                          if (parentMatches && !q) {
+                            results.push(
+                              <button
+                                key={parent.id}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setBulkCategoryId(parent.id);
+                                  setBulkCategorySearch("");
+                                  setShowBulkCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-semibold text-muted-foreground hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: parent.color || "#6b7280" }} />
+                                {parent.name}
+                              </button>
+                            );
+                          }
+
+                          for (const child of children) {
+                            results.push(
+                              <button
+                                key={child.id}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setBulkCategoryId(child.id);
+                                  setBulkCategorySearch("");
+                                  setShowBulkCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: child.color || parent.color || "#6b7280" }} />
+                                <span>{child.name}</span>
+                                <span className="ml-auto text-xs text-muted-foreground">{parent.name}</span>
+                              </button>
+                            );
+                          }
+
+                          if (parentMatches && q && children.length > 0) {
+                            results.push(
+                              <button
+                                key={parent.id + "-self"}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setBulkCategoryId(parent.id);
+                                  setBulkCategorySearch("");
+                                  setShowBulkCategoryDropdown(false);
+                                }}
+                                className="flex w-full items-center gap-3 px-6 py-2 text-left text-sm hover:bg-accent"
+                              >
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: parent.color || "#6b7280" }} />
+                                <span>{parent.name}</span>
+                                <span className="ml-auto text-xs text-muted-foreground">parent</span>
+                              </button>
+                            );
+                          }
+                        }
+
+                        if (results.length === 0) {
+                          return <div className="px-4 py-3 text-sm text-muted-foreground">No categories found</div>;
+                        }
+
+                        return results;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowBulkCategoryModal(false);
+                    setBulkCategoryId("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleBulkCategoryChange}
+                  disabled={!bulkCategoryId || bulkProcessing}
+                >
+                  {bulkProcessing ? "Updating..." : "Update Category"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg max-h-[80vh] overflow-y-auto">
@@ -645,7 +1264,6 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* CSV Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
@@ -761,6 +1379,183 @@ export default function TransactionsPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-2xl rounded-xl bg-card p-6 shadow-xl border border-border max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold">Review Transactions</h2>
+                <p className="text-sm text-muted-foreground">Reassign transactions to proper categories</p>
+              </div>
+              <button onClick={() => setShowReviewModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 flex items-end gap-3">
+              <div className="flex-1">
+                <label className="mb-2 block text-sm font-medium">Reviewing category</label>
+                <select
+                  value={reviewSourceCategory}
+                  onChange={(e) => { setReviewSourceCategory(e.target.value); setReviewTargetId({}); setDetectedPatterns([]); setShowPatternResults(false); }}
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
+                >
+                  {(() => {
+                    const miscCat = categories.find(c => c.name === "Miscellaneous" && !c.parentId);
+                    const otherCats = categories.filter(c => c.name === "Other");
+                    const options: { id: string; label: string }[] = [];
+                    if (miscCat) {
+                      const count = transactions.filter(t => t.categoryId === miscCat.id).length;
+                      options.push({ id: miscCat.name, label: `Miscellaneous (${count})` });
+                    }
+                    for (const oc of otherCats) {
+                      const parent = oc.parentId ? categories.find(p => p.id === oc.parentId) : null;
+                      const count = transactions.filter(t => t.categoryId === oc.id).length;
+                      options.push({ id: oc.name, label: `${parent?.name || "Unknown"}: Other (${count})` });
+                    }
+                    return options.map(o => (
+                      <option key={o.id + o.label} value={o.id}>{o.label}</option>
+                    ));
+                  })()}
+                </select>
+              </div>
+              <Button variant="outline" onClick={handleDetectPatterns}>
+                <Search className="mr-2 h-4 w-4" />
+                Detect Patterns
+              </Button>
+            </div>
+
+            {showPatternResults && detectedPatterns.length > 0 && (
+              <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <h3 className="text-sm font-semibold mb-3">Detected Patterns</h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {detectedPatterns.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between rounded border border-border bg-background px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">"{p.pattern}"</span>
+                        <span className="text-xs text-muted-foreground ml-2">({p.count} transactions)</span>
+                        <span className="text-xs text-muted-foreground ml-2">&rarr; {p.suggestedCategoryName}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleApplyPattern(i)}
+                        disabled={confirmingPattern === i}
+                      >
+                        {confirmingPattern === i ? "Applying..." : "Apply"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {showPatternResults && detectedPatterns.length === 0 && (
+              <div className="mb-4 rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                No patterns detected.
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {(() => {
+                const sourceCats = categories.filter(c => c.name === reviewSourceCategory);
+                const sourceIds = sourceCats.flatMap(sc => {
+                  if (!sc.parentId) {
+                    return [sc.id, ...categories.filter(c => c.parentId === sc.id).map(c => c.id)];
+                  }
+                  return [sc.id];
+                });
+                const reviewTransactions = transactions.filter(t => sourceIds.includes(t.categoryId));
+
+                if (reviewTransactions.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-muted-foreground">
+                      <CheckCircle className="mx-auto mb-2 h-8 w-8 text-success" />
+                      No transactions in this category.
+                    </div>
+                  );
+                }
+
+                return reviewTransactions.map(t => (
+                  <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{t.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(t.date).toLocaleDateString("id-ID")} &middot; {t.type === "income" ? "+" : "-"}Rp {Number(t.amount).toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                    <div className="relative w-52" data-review-dropdown>
+                      <input
+                        type="text"
+                        placeholder={reviewUpdating === t.id ? "Saving..." : "Search category..."}
+                        value={reviewTargetId[t.id] ? (categories.find(c => c.id === reviewTargetId[t.id])?.name || "") : ""}
+                        onChange={(e) => {
+                          setReviewTargetId(prev => ({ ...prev, [t.id]: "" }));
+                          setReviewCategorySearch(e.target.value);
+                          setShowReviewCategoryDropdown(true);
+                        }}
+                        onFocus={() => {
+                          setReviewCategorySearch("");
+                          setShowReviewCategoryDropdown(true);
+                        }}
+                        disabled={reviewUpdating === t.id}
+                        className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+                      />
+                      {showReviewCategoryDropdown && reviewCategorySearch && (
+                        <div data-review-dropdown className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
+                          {(() => {
+                            const q = reviewCategorySearch.toLowerCase();
+                            const filtered = categories
+                              .filter(c => {
+                                if (c.name === reviewSourceCategory) return false;
+                                if (c.parentId) {
+                                  const parent = categories.find(p => p.id === c.parentId);
+                                  if (parent?.name === reviewSourceCategory) return false;
+                                }
+                                return c.name.toLowerCase().includes(q);
+                              });
+
+                            if (filtered.length === 0) {
+                              return <div className="px-4 py-3 text-sm text-muted-foreground">No categories found</div>;
+                            }
+
+                            return filtered
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(c => {
+                                const parent = c.parentId ? categories.find(p => p.id === c.parentId) : null;
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      handleReviewCategoryChange(t.id, c.id);
+                                      setReviewTargetId(prev => ({ ...prev, [t.id]: c.id }));
+                                      setReviewCategorySearch("");
+                                      setShowReviewCategoryDropdown(false);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
+                                  >
+                                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color || "#6b7280" }} />
+                                    <span>{c.name}</span>
+                                    {parent && <span className="ml-auto text-xs text-muted-foreground">{parent.name}</span>}
+                                  </button>
+                                );
+                              });
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <Button className="mt-4 w-full" onClick={() => setShowReviewModal(false)}>
+              Done
+            </Button>
           </div>
         </div>
       )}

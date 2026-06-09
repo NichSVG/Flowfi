@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
 
 export async function POST(req: Request) {
   try {
@@ -34,23 +35,59 @@ export async function POST(req: Request) {
       },
     });
 
-    // Create default categories for the user
-    await prisma.category.createMany({
-      data: [
-        { name: "Food & Dining", icon: "utensils", color: "#ef4444", type: "expense", userId: user.id, isDefault: true },
-        { name: "Transportation", icon: "car", color: "#3b82f6", type: "expense", userId: user.id, isDefault: true },
-        { name: "Bills & Utilities", icon: "receipt", color: "#f59e0b", type: "expense", userId: user.id, isDefault: true },
-        { name: "Entertainment", icon: "film", color: "#8b5cf6", type: "expense", userId: user.id, isDefault: true },
-        { name: "Shopping", icon: "shopping-bag", color: "#ec4899", type: "expense", userId: user.id, isDefault: true },
-        { name: "Health", icon: "heart", color: "#10b981", type: "expense", userId: user.id, isDefault: true },
-        { name: "Education", icon: "book", color: "#6366f1", type: "expense", userId: user.id, isDefault: true },
-        { name: "Other", icon: "more-horizontal", color: "#6b7280", type: "expense", userId: user.id, isDefault: true },
-        { name: "Salary", icon: "briefcase", color: "#22c55e", type: "income", userId: user.id, isDefault: true },
-        { name: "Freelance", icon: "laptop", color: "#14b8a6", type: "income", userId: user.id, isDefault: true },
-        { name: "Investments", icon: "trending-up", color: "#0ea5e9", type: "income", userId: user.id, isDefault: true },
-        { name: "Other Income", icon: "plus-circle", color: "#84cc16", type: "income", userId: user.id, isDefault: true },
-      ],
-    });
+    for (const cat of EXPENSE_CATEGORIES) {
+      const parent = await prisma.category.create({
+        data: {
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color,
+          type: "expense",
+          userId: user.id,
+          isDefault: true,
+        },
+      });
+
+      if (cat.subcategories.length > 0) {
+        await prisma.category.createMany({
+          data: cat.subcategories.map((subName) => ({
+            name: subName,
+            icon: cat.icon,
+            color: cat.color,
+            type: "expense",
+            userId: user.id,
+            isDefault: true,
+            parentId: parent.id,
+          })),
+        });
+      }
+    }
+
+    for (const cat of INCOME_CATEGORIES) {
+      const parent = await prisma.category.create({
+        data: {
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color,
+          type: "income",
+          userId: user.id,
+          isDefault: true,
+        },
+      });
+
+      if (cat.subcategories.length > 0) {
+        await prisma.category.createMany({
+          data: cat.subcategories.map((subName) => ({
+            name: subName,
+            icon: cat.icon,
+            color: cat.color,
+            type: "income",
+            userId: user.id,
+            isDefault: true,
+            parentId: parent.id,
+          })),
+        });
+      }
+    }
 
     return NextResponse.json(
       { message: "User created successfully", user: { id: user.id, email: user.email, name: user.name } },
