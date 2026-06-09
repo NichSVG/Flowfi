@@ -65,8 +65,8 @@ export default function TransactionsPage() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewSourceCategory, setReviewSourceCategory] = useState("Miscellaneous");
   const [reviewUpdating, setReviewUpdating] = useState<string | null>(null);
-  const [reviewCategorySearch, setReviewCategorySearch] = useState("");
-  const [showReviewCategoryDropdown, setShowReviewCategoryDropdown] = useState(false);
+  const [reviewCategorySearch, setReviewCategorySearch] = useState<Record<string, string>>({});
+  const [showReviewDropdownFor, setShowReviewDropdownFor] = useState<string | null>(null);
   const [reviewTargetId, setReviewTargetId] = useState<Record<string, string>>({});
 
   const [detectedPatterns, setDetectedPatterns] = useState<{
@@ -121,7 +121,7 @@ export default function TransactionsPage() {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (!target.closest("[data-review-dropdown]")) {
-        setShowReviewCategoryDropdown(false);
+        setShowReviewDropdownFor(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -135,7 +135,7 @@ export default function TransactionsPage() {
   async function fetchData() {
     try {
       const [transRes, catRes] = await Promise.all([
-        fetch("/api/transactions?limit=100"),
+        fetch("/api/transactions"),
         fetch("/api/categories?flat=true"),
       ]);
 
@@ -1491,23 +1491,23 @@ export default function TransactionsPage() {
                       <input
                         type="text"
                         placeholder={reviewUpdating === t.id ? "Saving..." : "Search category..."}
-                        value={reviewTargetId[t.id] ? (categories.find(c => c.id === reviewTargetId[t.id])?.name || "") : ""}
+                        value={showReviewDropdownFor === t.id ? (reviewCategorySearch[t.id] || "") : (reviewTargetId[t.id] ? (categories.find(c => c.id === reviewTargetId[t.id])?.name || "") : "")}
                         onChange={(e) => {
                           setReviewTargetId(prev => ({ ...prev, [t.id]: "" }));
-                          setReviewCategorySearch(e.target.value);
-                          setShowReviewCategoryDropdown(true);
+                          setReviewCategorySearch(prev => ({ ...prev, [t.id]: e.target.value }));
+                          setShowReviewDropdownFor(t.id);
                         }}
                         onFocus={() => {
-                          setReviewCategorySearch("");
-                          setShowReviewCategoryDropdown(true);
+                          setReviewCategorySearch(prev => ({ ...prev, [t.id]: "" }));
+                          setShowReviewDropdownFor(t.id);
                         }}
                         disabled={reviewUpdating === t.id}
                         className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
                       />
-                      {showReviewCategoryDropdown && reviewCategorySearch && (
+                      {showReviewDropdownFor === t.id && (reviewCategorySearch[t.id] || "").length > 0 && (
                         <div data-review-dropdown className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
                           {(() => {
-                            const q = reviewCategorySearch.toLowerCase();
+                            const q = (reviewCategorySearch[t.id] || "").toLowerCase();
                             const filtered = categories
                               .filter(c => {
                                 if (c.name === reviewSourceCategory) return false;
@@ -1533,8 +1533,8 @@ export default function TransactionsPage() {
                                     onClick={() => {
                                       handleReviewCategoryChange(t.id, c.id);
                                       setReviewTargetId(prev => ({ ...prev, [t.id]: c.id }));
-                                      setReviewCategorySearch("");
-                                      setShowReviewCategoryDropdown(false);
+                                      setReviewCategorySearch(prev => ({ ...prev, [t.id]: "" }));
+                                      setShowReviewDropdownFor(null);
                                     }}
                                     className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
                                   >

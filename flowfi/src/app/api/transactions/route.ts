@@ -11,7 +11,8 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const rawLimit = searchParams.get("limit");
+    const limit = rawLimit ? parseInt(rawLimit) : 0;
     const category = searchParams.get("category");
     const type = searchParams.get("type");
     const search = searchParams.get("search");
@@ -31,8 +32,7 @@ export async function GET(req: Request) {
         where,
         include: { category: true },
         orderBy: { date: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
+        ...(limit > 0 ? { skip: (page - 1) * limit, take: limit } : {}),
       }),
       prisma.transaction.count({ where }),
     ]);
@@ -41,9 +41,9 @@ export async function GET(req: Request) {
       transactions,
       pagination: {
         page,
-        limit,
+        limit: limit || total,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages: limit > 0 ? Math.ceil(total / limit) : 1,
       },
     });
   } catch (error) {
