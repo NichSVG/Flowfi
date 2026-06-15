@@ -3,9 +3,10 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./categories";
 
 const googleProvider = process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-  ? Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET })
+  ? Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET, checks: ["state"] })
   : null;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -52,7 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         try {
           const email = user.email;
@@ -61,11 +62,70 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           let dbUser = await prisma.user.findUnique({ where: { email } });
 
           if (!dbUser) {
-            dbUser = await prisma.user.create({
+            // Create new user for Google sign-up
+            const newUser = await prisma.user.create({
               data: { email, name: user.name, image: user.image },
             });
+            dbUser = newUser;
+
+            // Create default categories
+            try {
+              for (const cat of EXPENSE_CATEGORIES) {
+                const parent = await prisma.category.create({
+                  data: {
+                    name: cat.name,
+                    icon: cat.icon,
+                    color: cat.color,
+                    type: "expense",
+                    userId: newUser.id,
+                    isDefault: true,
+                  },
+                });
+                if (cat.subcategories.length > 0) {
+                  await prisma.category.createMany({
+                    data: cat.subcategories.map((subName) => ({
+                      name: subName,
+                      icon: cat.icon,
+                      color: cat.color,
+                      type: "expense",
+                      userId: newUser.id,
+                      isDefault: true,
+                      parentId: parent.id,
+                    })),
+                  });
+                }
+              }
+              for (const cat of INCOME_CATEGORIES) {
+                const parent = await prisma.category.create({
+                  data: {
+                    name: cat.name,
+                    icon: cat.icon,
+                    color: cat.color,
+                    type: "income",
+                    userId: newUser.id,
+                    isDefault: true,
+                  },
+                });
+                if (cat.subcategories.length > 0) {
+                  await prisma.category.createMany({
+                    data: cat.subcategories.map((subName) => ({
+                      name: subName,
+                      icon: cat.icon,
+                      color: cat.color,
+                      type: "income",
+                      userId: newUser.id,
+                      isDefault: true,
+                      parentId: parent.id,
+                    })),
+                  });
+                }
+              }
+            } catch (catError) {
+              console.error("Error creating categories:", catError);
+            }
           }
 
+          // Create account link if it doesn't exist
           const existingAccount = await prisma.account.findUnique({
             where: {
               provider_providerAccountId: {
@@ -100,6 +160,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       return true;
+    },
+    async redirect({ url, baseUrl }) {
+      // If url is "/" or the base URL itself, it's a sign-out - allow it
+      if (url === `${baseUrl}/` || url === baseUrl || url === "/") {
+        return `${baseUrl}/`;
+      }
+      // Otherwise, always redirect to dashboard after sign-in
+      return `${baseUrl}/dashboard`;
     },
     async session({ session, token }) {
       if (token.sub) {

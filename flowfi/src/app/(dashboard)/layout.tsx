@@ -1,11 +1,26 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import { Sidebar } from "@/components/sidebar";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth();
+
+  if (session?.user?.id) {
+    const onboarding = await prisma.userOnboarding.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    if (!onboarding || !onboarding.completed) {
+      redirect("/onboarding");
+    }
+  }
+
   return (
     <ThemeProvider>
       <div className="flex h-screen overflow-hidden">

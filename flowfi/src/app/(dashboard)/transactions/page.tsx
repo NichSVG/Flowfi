@@ -16,6 +16,7 @@ import {
   CheckCircle,
   CheckSquare,
   Square,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,8 @@ export default function TransactionsPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [recategorizing, setRecategorizing] = useState(false);
+  const [recategorizeResult, setRecategorizeResult] = useState<{ message: string; updated: number; changes?: Array<{ description: string; from: string; to: string }> } | null>(null);
   const [uploadResult, setUploadResult] = useState<{ message: string; count: number; errors?: string[] } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
@@ -485,6 +488,23 @@ export default function TransactionsPage() {
     });
   };
 
+  const handleRecategorize = async () => {
+    setRecategorizing(true);
+    setRecategorizeResult(null);
+    try {
+      const res = await fetch("/api/transactions/recategorize", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setRecategorizeResult(data);
+        fetchData(); // Refresh the transaction list
+      }
+    } catch (error) {
+      console.error("Failed to recategorize:", error);
+    } finally {
+      setRecategorizing(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -549,6 +569,10 @@ export default function TransactionsPage() {
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
+          <Button variant="outline" onClick={handleRecategorize} disabled={recategorizing}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${recategorizing ? "animate-spin" : ""}`} />
+            {recategorizing ? "Categorizing..." : "Auto-Categorize"}
+          </Button>
           <Button variant="outline" onClick={() => setShowCategoryModal(true)}>
             <Tag className="mr-2 h-4 w-4" />
             Categories
@@ -563,6 +587,27 @@ export default function TransactionsPage() {
           </Button>
         </div>
       </div>
+
+      {recategorizeResult && (
+        <Card variant="bordered" className="border-success/50 bg-success/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-success">{recategorizeResult.message}</p>
+                {recategorizeResult.changes && recategorizeResult.changes.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {recategorizeResult.changes.slice(0, 5).map(c => `"${c.description}" → ${c.to}`).join("; ")}
+                    {recategorizeResult.changes.length > 5 && `... and ${recategorizeResult.changes.length - 5} more`}
+                  </p>
+                )}
+              </div>
+              <button onClick={() => setRecategorizeResult(null)} className="rounded p-1 hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {selectedIds.size > 0 && (
         <Card variant="bordered" className="border-primary/50 bg-primary/5">

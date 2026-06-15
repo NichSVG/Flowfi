@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { addXp, checkAchievements, XP_REWARDS, ensureUserStats } from "@/lib/gamification";
 
 export async function GET(req: Request) {
   try {
@@ -77,6 +78,15 @@ export async function POST(req: Request) {
         userId: session.user.id,
       },
     });
+
+    // Gamification: award XP
+    try {
+      await ensureUserStats(session.user.id);
+      await addXp(session.user.id, XP_REWARDS.ADD_GOAL, "goal:added");
+      await checkAchievements(session.user.id);
+    } catch (e) {
+      console.error("Gamification error (non-blocking):", e);
+    }
 
     return NextResponse.json(goal, { status: 201 });
   } catch (error) {

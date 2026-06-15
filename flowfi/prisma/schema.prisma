@@ -25,6 +25,12 @@ model User {
   budgets        Budget[]
   goals          Goal[]
   categories     Category[]
+  onboarding     UserOnboarding?
+  userStats      UserStats?
+  achievements   UserAchievement[]
+  challenges     UserChallenge[]
+  insights       FinancialInsight[]
+  preferences    UserPreference?
 }
 
 model Account {
@@ -143,4 +149,118 @@ model Goal {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
+}
+
+model UserOnboarding {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  completed       Boolean  @default(false)
+  financialGoals  Json?    // ["save_more", "reduce_debt", "invest", "track_spending"]
+  monthlyIncome   String?  // "under_5m", "5m_10m", "10m_25m", "25m_50m", "above_50m"
+  spendingHabits  Json?    // ["food", "shopping", "transport", "entertainment"]
+  savingsTarget   Float?   // percentage of income they want to save
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserStats {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  xp                Int      @default(0)
+  level             Int      @default(1)
+  currentStreak     Int      @default(0)
+  longestStreak     Int      @default(0)
+  lastActiveDate    DateTime?
+  totalTransactions Int      @default(0)
+  healthScore       Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  icon        String
+  xpReward    Int      @default(50)
+  category    String   // "streak", "transaction", "savings", "budget", "milestone"
+  requirement Json     // { type: "streak", value: 7 } or { type: "transactions", value: 100 }
+  createdAt   DateTime @default(now())
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+model Challenge {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  type        String   // "daily", "weekly"
+  xpReward    Int      @default(30)
+  requirement Json     // { type: "no_spend_day" } or { type: "stay_under_budget" } or { type: "save_amount", value: 50000 }
+  createdAt   DateTime @default(now())
+
+  users UserChallenge[]
+}
+
+model UserChallenge {
+  id          String    @id @default(cuid())
+  userId      String
+  challengeId String
+  status      String    @default("active") // "active", "completed", "failed"
+  progress    Float     @default(0)
+  targetDate  DateTime  // the day/week this challenge is for
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId, targetDate])
+}
+
+model FinancialInsight {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "overspending", "saving_tip", "trend", "achievement", "weekly_recap"
+  title     String
+  message   String
+  data      Json?    // additional context
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, isRead])
+}
+
+model UserPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  dashboardWidgets Json? // ["streak", "xp", "challenges", "insights", "health_score", "weekly_recap"]
+  reminderEnabled Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

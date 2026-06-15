@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, X, AlertTriangle } from "lucide-react";
+import { Plus, Edit2, Trash2, X, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,10 @@ interface Budget {
 interface BudgetsResponse {
   budgets: Budget[];
   currentMonth: string;
+  currentMonthKey: string;
+  availableMonths: string[];
+  hasPrevMonth: boolean;
+  hasNextMonth: boolean;
 }
 
 export default function BudgetsPage() {
@@ -39,6 +43,11 @@ export default function BudgetsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [currentMonth, setCurrentMonth] = useState("");
+  const [currentMonthKey, setCurrentMonthKey] = useState("");
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [hasPrevMonth, setHasPrevMonth] = useState(false);
+  const [hasNextMonth, setHasNextMonth] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     categoryId: "",
@@ -47,13 +56,14 @@ export default function BudgetsPage() {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(selectedMonth || undefined);
+  }, [selectedMonth]);
 
-  async function fetchData() {
+  async function fetchData(month?: string) {
     try {
+      const url = month ? `/api/budgets?month=${month}` : "/api/budgets";
       const [budgetsRes, catsRes] = await Promise.all([
-        fetch("/api/budgets"),
+        fetch(url),
         fetch("/api/categories?type=expense"),
       ]);
 
@@ -61,6 +71,10 @@ export default function BudgetsPage() {
         const data: BudgetsResponse = await budgetsRes.json();
         setBudgets(Array.isArray(data.budgets) ? data.budgets : []);
         setCurrentMonth(data.currentMonth || "");
+        setCurrentMonthKey(data.currentMonthKey || "");
+        setAvailableMonths(data.availableMonths || []);
+        setHasPrevMonth(data.hasPrevMonth || false);
+        setHasNextMonth(data.hasNextMonth || false);
       }
 
       if (catsRes.ok) {
@@ -89,6 +103,24 @@ export default function BudgetsPage() {
     return "bg-success";
   };
 
+  const goToPrevMonth = () => {
+    if (hasPrevMonth && availableMonths.length > 0) {
+      const currentIndex = availableMonths.indexOf(currentMonthKey);
+      if (currentIndex > 0) {
+        setSelectedMonth(availableMonths[currentIndex - 1]);
+      }
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (hasNextMonth && availableMonths.length > 0) {
+      const currentIndex = availableMonths.indexOf(currentMonthKey);
+      if (currentIndex < availableMonths.length - 1) {
+        setSelectedMonth(availableMonths[currentIndex + 1]);
+      }
+    }
+  };
+
   const handleAddBudget = async () => {
     try {
       const res = await fetch("/api/budgets", {
@@ -104,7 +136,7 @@ export default function BudgetsPage() {
       if (res.ok) {
         setShowAddModal(false);
         resetForm();
-        fetchData();
+        fetchData(selectedMonth || undefined);
       }
     } catch (error) {
       console.error("Failed to add budget:", error);
@@ -139,9 +171,27 @@ export default function BudgetsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Budgets</h1>
-          <p className="text-muted-foreground">
-            {currentMonth ? `Tracking spending for ${currentMonth}` : "Set spending limits for each category"}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToPrevMonth}
+              disabled={!hasPrevMonth}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-muted-foreground font-medium">
+              {currentMonth || "No data"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToNextMonth}
+              disabled={!hasNextMonth}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <Plus className="mr-2 h-4 w-4" />

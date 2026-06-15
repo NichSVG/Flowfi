@@ -119,7 +119,7 @@ export default function ProfilePage() {
     try {
       const res = await fetch("/api/user/delete", { method: "DELETE" });
       if (res.ok) {
-        await signOut({ callbackUrl: "/" });
+        await signOut({ callbackUrl: "/", redirect: true });
       } else {
         alert("Failed to delete account. Please try again.");
       }

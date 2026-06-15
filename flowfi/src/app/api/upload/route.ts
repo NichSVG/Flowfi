@@ -3,18 +3,40 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { detectCurrency } from "@/lib/currency";
 import { CATEGORY_KEYWORDS } from "@/lib/category-keywords";
+import { extractMerchantName, searchMerchantCategory } from "@/lib/merchant-search";
 
 const SUBCATEGORY_TO_PARENT: Record<string, string> = {};
 
-function detectCategory(description: string, type: string): { category: string; subcategory?: string; parentCategory?: string } {
-  const desc = description.toLowerCase();
+function detectCategoryFromKeywords(text: string): { category: string; subcategory?: string; parentCategory?: string } | null {
+  const lower = text.toLowerCase();
 
   for (const [category, data] of Object.entries(CATEGORY_KEYWORDS)) {
     for (const keyword of data.keywords) {
-      if (keyword && desc.includes(keyword)) {
+      if (keyword && lower.includes(keyword)) {
         return { category, subcategory: data.subcategory, parentCategory: data.parent };
       }
     }
+  }
+
+  return null;
+}
+
+async function detectCategory(description: string, type: string): Promise<{ category: string; subcategory?: string; parentCategory?: string }> {
+  // Step 1: Try matching full description against keywords
+  const fullMatch = detectCategoryFromKeywords(description);
+  if (fullMatch) return fullMatch;
+
+  // Step 2: Extract merchant name and try matching that
+  const merchant = extractMerchantName(description);
+  if (merchant !== description) {
+    const merchantMatch = detectCategoryFromKeywords(merchant);
+    if (merchantMatch) return merchantMatch;
+  }
+
+  // Step 3: Web search fallback for unknown merchants
+  if (type === "expense" && merchant.length > 2) {
+    const searchResult = await searchMerchantCategory(merchant);
+    if (searchResult) return searchResult;
   }
 
   return { category: type === "income" ? "Income" : "Miscellaneous" };
@@ -131,7 +153,7 @@ function parseCSVRow(row: string): string[] {
   return result;
 }
 
-function parseCSV(text: string, userId: string, categoryMap: Map<string, string>) {
+async function parseCSV(text: string, userId: string, categoryMap: Map<string, string>) {
   const cleanText = text.replace(/^\uFEFF/, "");
   const lines = cleanText.split("\n").filter((line) => line.trim());
   const transactions: Array<{
@@ -209,7 +231,7 @@ function parseCSV(text: string, userId: string, categoryMap: Map<string, string>
 
     const absAmount = Math.abs(amount);
     const date = dateStr ? parseIndonesianDate(dateStr) : new Date();
-    const { category: categoryName, subcategory, parentCategory } = detectCategory(description, type);
+    const { category: categoryName, subcategory, parentCategory } = await detectCategory(description, type);
     const categoryId = resolveCategoryId(categoryName, subcategory, parentCategory, type, categoryMap);
     const paymentMethod = detectPaymentMethod(description);
 
@@ -249,7 +271,7 @@ async function parsePDF(buffer: Buffer) {
   return text;
 }
 
-function parsePDFText(text: string, userId: string, categoryMap: Map<string, string>) {
+async function parsePDFText(text: string, userId: string, categoryMap: Map<string, string>) {
   const lines = text.split("\n").filter((line) => line.trim());
   const transactions: Array<{
     amount: number;
@@ -316,7 +338,7 @@ function parsePDFText(text: string, userId: string, categoryMap: Map<string, str
     }
 
     const absAmount = Math.abs(amount);
-    const { category: categoryName, subcategory, parentCategory } = detectCategory(description, type);
+    const { category: categoryName, subcategory, parentCategory } = await detectCategory(description, type);
     const categoryId = resolveCategoryId(categoryName, subcategory, parentCategory, type, categoryMap);
     const paymentMethod = detectPaymentMethod(description);
 
@@ -415,7 +437,7 @@ export async function POST(req: Request) {
       if (isCSV) {
         const text = await file.text();
         detectedCurrency = detectCurrency(text);
-        const result = parseCSV(text, userId, categoryMap);
+        const result = await parseCSV(text, userId, categoryMap);
         transactions = result.transactions;
         errors = result.errors;
       } else {
@@ -423,7 +445,7 @@ export async function POST(req: Request) {
         const buffer = Buffer.from(arrayBuffer);
         const text = await parsePDF(buffer);
         detectedCurrency = detectCurrency(text);
-        const result = parsePDFText(text, userId, categoryMap);
+        const result = await parsePDFText(text, userId, categoryMap);
         transactions = result.transactions;
         errors = result.errors;
       }

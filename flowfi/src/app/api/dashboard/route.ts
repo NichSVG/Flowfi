@@ -2,6 +2,26 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Vibrant, distinct colors for pie chart slices
+const CHART_COLORS = [
+  "#ef4444", // Red
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Violet
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#e11d48", // Rose
+  "#84cc16", // Lime
+  "#a855f7", // Purple
+  "#0ea5e9", // Sky
+  "#d946ef", // Fuchsia
+  "#22c55e", // Green
+];
+
 export async function GET(req: Request) {
   try {
     const session = await auth();
@@ -109,7 +129,9 @@ export async function GET(req: Request) {
       orderBy: { date: "desc" },
     });
 
-    const categorySpending = spendingByCategory.map((item) => {
+    const categorySpending = spendingByCategory
+      .sort((a, b) => Number(b._sum.amount) - Number(a._sum.amount))
+      .map((item, index) => {
       const category = categories.find((c) => c.id === item.categoryId);
       const catId = item.categoryId;
       const catTransactions = allMonthTransactions
@@ -125,7 +147,7 @@ export async function GET(req: Request) {
       return {
         name: category?.name || "Unknown",
         value: Number(item._sum.amount) || 0,
-        color: category?.color || "#6b7280",
+        color: CHART_COLORS[index % CHART_COLORS.length],
         categoryId: catId,
         transactionCount: catTransactions.length,
         transactions: catTransactions,
@@ -181,12 +203,28 @@ export async function GET(req: Request) {
       take: 3,
     });
 
+    // Get all categories for parent-child relationships
+    const allCategories = await prisma.category.findMany({
+      where: {
+        OR: [
+          { userId },
+          { isDefault: true },
+        ],
+      },
+    });
+
     const budgetSummaries = await Promise.all(
       budgets.map(async (budget) => {
+        // Get subcategory IDs for this budget's category
+        const subcategoryIds = allCategories
+          .filter(c => c.parentId === budget.categoryId)
+          .map(c => c.id);
+        const allCategoryIds = [budget.categoryId, ...subcategoryIds];
+
         const result = await prisma.transaction.aggregate({
           where: {
             userId,
-            categoryId: budget.categoryId,
+            categoryId: { in: allCategoryIds },
             type: "expense",
             date: { gte: startOfMonth, lte: endOfMonth },
           },

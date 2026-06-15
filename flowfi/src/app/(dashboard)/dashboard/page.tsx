@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { GamificationPanel } from "@/components/gamification-panel";
 import {
   PieChart,
   Pie,
@@ -243,8 +244,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card variant="bordered" className={selectedCategoryName ? "lg:col-span-2" : ""}>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card variant="bordered" className={selectedCategoryName ? "lg:col-span-2" : "lg:col-span-2"}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Spending by Category</CardTitle>
@@ -376,6 +377,11 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Gamification Panel */}
+        <div className="lg:col-span-1 overflow-y-auto max-h-[600px]">
+          <GamificationPanel />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

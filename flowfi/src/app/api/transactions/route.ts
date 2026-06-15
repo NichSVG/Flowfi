@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { addXp, updateStreak, checkAchievements, checkDailyChallenges, XP_REWARDS, ensureUserStats } from "@/lib/gamification";
 
 export async function GET(req: Request) {
   try {
@@ -85,6 +86,22 @@ export async function POST(req: Request) {
       },
       include: { category: true },
     });
+
+    // Gamification: award XP and update streak
+    try {
+      await ensureUserStats(session.user.id);
+      const xpAmount = type === "income" ? XP_REWARDS.ADD_INCOME : XP_REWARDS.ADD_TRANSACTION;
+      await addXp(session.user.id, xpAmount, `transaction:${type}`);
+      await prisma.userStats.update({
+        where: { userId: session.user.id },
+        data: { totalTransactions: { increment: 1 } },
+      });
+      await updateStreak(session.user.id);
+      await checkAchievements(session.user.id);
+      await checkDailyChallenges(session.user.id);
+    } catch (e) {
+      console.error("Gamification error (non-blocking):", e);
+    }
 
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {

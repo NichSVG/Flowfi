@@ -64,7 +64,7 @@ export const EXPENSE_CATEGORIES: CategoryDef[] = [
     name: "Financial",
     icon: "landmark",
     color: "#64748b",
-    subcategories: ["Savings", "Investments", "Loans", "Taxes", "Other"],
+    subcategories: ["Savings", "Investments", "Loans", "Taxes", "E-Wallet", "Bank Fees", "Other"],
   },
   {
     name: "Family",
