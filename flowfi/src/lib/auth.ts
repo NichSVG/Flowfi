@@ -62,7 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           let dbUser = await prisma.user.findUnique({ where: { email } });
 
           if (!dbUser) {
-            // Create new user for Google sign-up
+            // New user - create account (sign-up)
             const newUser = await prisma.user.create({
               data: { email, name: user.name, image: user.image },
             });
@@ -123,6 +123,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             } catch (catError) {
               console.error("Error creating categories:", catError);
             }
+
+            // Mark as new user in JWT
+            user.id = newUser.id;
+          } else {
+            // Existing user - sign in
+            user.id = dbUser.id;
           }
 
           // Create account link if it doesn't exist
@@ -162,11 +168,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async redirect({ url, baseUrl }) {
-      // If url is "/" or the base URL itself, it's a sign-out - allow it
-      if (url === `${baseUrl}/` || url === baseUrl || url === "/") {
-        return `${baseUrl}/`;
-      }
-      // Otherwise, always redirect to dashboard after sign-in
+      // Always redirect to dashboard - the dashboard layout will handle onboarding redirect
       return `${baseUrl}/dashboard`;
     },
     async session({ session, token }) {
