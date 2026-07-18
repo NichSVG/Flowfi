@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
+      <div className="rounded-2xl border border-border bg-card p-5 sm:p-8 shadow-lg">
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
@@ -108,14 +108,15 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="flex items-center gap-2">
               <input type="checkbox" className="h-4 w-4 rounded border-border" />
               <span className="text-sm text-muted-foreground">Remember me</span>

@@ -12,6 +12,7 @@ interface Category {
   name: string;
   color: string | null;
   type: string;
+  parentId: string | null;
 }
 
 interface Budget {
@@ -64,7 +65,7 @@ export default function BudgetsPage() {
       const url = month ? `/api/budgets?month=${month}` : "/api/budgets";
       const [budgetsRes, catsRes] = await Promise.all([
         fetch(url),
-        fetch("/api/categories?type=expense"),
+        fetch("/api/categories?type=expense&flat=true"),
       ]);
 
       if (budgetsRes.ok) {
@@ -168,7 +169,7 @@ export default function BudgetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Budgets</h1>
           <div className="flex items-center gap-2 mt-1">
@@ -193,7 +194,7 @@ export default function BudgetsPage() {
             </Button>
           </div>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Budget
         </Button>
@@ -248,7 +249,8 @@ export default function BudgetsPage() {
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleDeleteBudget(budget.id)}
-                        className="rounded p-1 hover:bg-destructive/10"
+                        aria-label="Delete budget"
+                        className="rounded p-2 hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </button>
@@ -295,8 +297,8 @@ export default function BudgetsPage() {
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Budget</h2>
               <button
@@ -304,7 +306,8 @@ export default function BudgetsPage() {
                   setShowAddModal(false);
                   resetForm();
                 }}
-                className="rounded p-1 hover:bg-accent"
+                className="rounded p-2 hover:bg-accent"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -319,9 +322,11 @@ export default function BudgetsPage() {
                   className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none"
                 >
                   <option value="">Select category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
+                  {categories
+                    .filter((cat) => !cat.parentId)
+                    .map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
                 </select>
               </div>
 

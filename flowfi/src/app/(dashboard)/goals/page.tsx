@@ -160,12 +160,12 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Savings Goals</h1>
           <p className="text-muted-foreground">Track your progress towards financial goals</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Goal
         </Button>
@@ -233,7 +233,8 @@ export default function GoalsPage() {
                     </div>
                     <button
                       onClick={() => handleDeleteGoal(goal.id)}
-                      className="rounded p-1 hover:bg-destructive/10"
+                      aria-label="Delete goal"
+                      className="rounded p-2 hover:bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </button>
@@ -294,8 +295,8 @@ export default function GoalsPage() {
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Goal</h2>
               <button
@@ -303,7 +304,8 @@ export default function GoalsPage() {
                   setShowAddModal(false);
                   resetForm();
                 }}
-                className="rounded p-1 hover:bg-accent"
+                className="rounded p-2 hover:bg-accent"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -365,8 +367,8 @@ export default function GoalsPage() {
       )}
 
       {addingFundsGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add Funds</h2>
               <button
@@ -374,7 +376,8 @@ export default function GoalsPage() {
                   setAddingFundsGoal(null);
                   setAddAmount("");
                 }}
-                className="rounded p-1 hover:bg-accent"
+                className="rounded p-2 hover:bg-accent"
+                aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>

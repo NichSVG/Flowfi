@@ -148,12 +148,12 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             {data.spendingByCategory.length === 0 ? (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              <div className="h-[260px] sm:h-[300px] flex items-center justify-center text-muted-foreground">
                 No spending data in this period
               </div>
             ) : (
               <>
-                <div className="h-[300px]">
+                <div className="h-[260px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -173,14 +173,14 @@ export default function AnalyticsPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {data.spendingByCategory.map((category) => (
-                    <div key={category.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: category.color }} />
-                        <span className="text-xs text-muted-foreground">{category.name}</span>
+                    <div key={category.name} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: category.color }} />
+                        <span className="text-xs text-muted-foreground truncate">{category.name}</span>
                       </div>
-                      <span className="text-xs font-medium">{format(category.value)}</span>
+                      <span className="text-xs font-medium shrink-0">{format(category.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -194,14 +194,14 @@ export default function AnalyticsPage() {
             <CardTitle>Income vs Expenses (6 months)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[260px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.monthlyTrend}>
+                <BarChart data={data.monthlyTrend} margin={{ left: -8, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" className="text-xs" />
-                  <YAxis className="text-xs" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={48} />
                   <Tooltip formatter={(value: number) => format(value)} />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -217,12 +217,12 @@ export default function AnalyticsPage() {
             <CardTitle>Savings Trend (6 months)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[260px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.monthlyTrend}>
+                <LineChart data={data.monthlyTrend} margin={{ left: -8, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" className="text-xs" />
-                  <YAxis className="text-xs" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={48} />
                   <Tooltip formatter={(value: number) => format(value)} />
                   <Line type="monotone" dataKey="savings" stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1" }} />
                 </LineChart>
@@ -245,18 +245,18 @@ export default function AnalyticsPage() {
                 {data.topExpenses.slice(0, 5).map((expense, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border p-3"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                         {index + 1}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{expense.description}</p>
-                        <p className="text-xs text-muted-foreground">{expense.category}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{expense.description}</p>
+                        <p className="text-xs text-muted-foreground truncate">{expense.category}</p>
                       </div>
                     </div>
-                    <p className="text-sm font-semibold text-destructive">{format(expense.amount)}</p>
+                    <p className="text-sm font-semibold text-destructive shrink-0">{format(expense.amount)}</p>
                   </div>
                 ))}
               </div>
@@ -268,8 +268,8 @@ export default function AnalyticsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card variant="bordered">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Budget Progress (Current Month)</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>Budget Progress</CardTitle>
               <Link href="/budgets">
                 <Button variant="ghost" size="sm">View All</Button>
               </Link>
@@ -287,12 +287,12 @@ export default function AnalyticsPage() {
                   const isOver = budget.spent > budget.budget;
                   return (
                     <div key={budget.name} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: budget.color }} />
-                          <span className="text-sm font-medium">{budget.name}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: budget.color }} />
+                          <span className="text-sm font-medium truncate">{budget.name}</span>
                         </div>
-                        <span className={`text-xs ${isOver ? "text-destructive" : "text-muted-foreground"}`}>
+                        <span className={`text-xs shrink-0 ${isOver ? "text-destructive" : "text-muted-foreground"}`}>
                           {format(budget.spent)} / {format(budget.budget)}
                         </span>
                       </div>
@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
 
         <Card variant="bordered">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <CardTitle>Goal Progress</CardTitle>
               <Link href="/goals">
                 <Button variant="ghost" size="sm">View All</Button>
@@ -328,12 +328,12 @@ export default function AnalyticsPage() {
               <div className="space-y-4">
                 {data.goals.map((goal) => (
                   <div key={goal.name} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Target className="h-4 w-4" style={{ color: goal.color }} />
-                        <span className="text-sm font-medium">{goal.name}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Target className="h-4 w-4 shrink-0" style={{ color: goal.color }} />
+                        <span className="text-sm font-medium truncate">{goal.name}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {format(goal.current)} / {format(goal.target)}
                       </span>
                     </div>

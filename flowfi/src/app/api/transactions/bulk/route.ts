@@ -10,7 +10,29 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { ids, categoryId } = body;
+    const { ids, categoryId, fromCategoryId, newCategoryId, month } = body;
+
+    if (fromCategoryId && newCategoryId) {
+      const where: any = {
+        userId: session.user.id,
+        categoryId: fromCategoryId,
+        type: "expense",
+      };
+
+      if (month) {
+        const [year, mon] = month.split("-").map(Number);
+        const startOfMonth = new Date(year, mon - 1, 1);
+        const endOfMonth = new Date(year, mon, 0);
+        where.date = { gte: startOfMonth, lte: endOfMonth };
+      }
+
+      const result = await prisma.transaction.updateMany({
+        where,
+        data: { categoryId: newCategoryId },
+      });
+
+      return NextResponse.json({ message: `Updated ${result.count} transactions`, count: result.count });
+    }
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: "No transaction IDs provided" }, { status: 400 });

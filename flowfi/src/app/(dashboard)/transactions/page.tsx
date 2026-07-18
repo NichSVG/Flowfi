@@ -106,6 +106,12 @@ export default function TransactionsPage() {
   const [bulkCategorySearch, setBulkCategorySearch] = useState("");
   const [showBulkCategoryDropdown, setShowBulkCategoryDropdown] = useState(false);
 
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryColor, setEditCategoryColor] = useState("#6366f1");
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -255,6 +261,7 @@ export default function TransactionsPage() {
 
   const handleAddCategory = async () => {
     if (!newCategory.name.trim()) return;
+    setCategoryError(null);
 
     try {
       const res = await fetch("/api/categories", {
@@ -265,13 +272,75 @@ export default function TransactionsPage() {
 
       if (res.ok) {
         const cat = await res.json();
-        setCategories([...categories, cat]);
+        setCategories((prev) => prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]);
         setNewCategory({ name: "", color: "#6366f1", type: "expense" });
         setShowCategoryModal(false);
+      } else {
+        const data = await res.json();
+        setCategoryError(data.error || "Failed to add category");
       }
     } catch (error) {
       console.error("Failed to add category:", error);
+      setCategoryError("Failed to add category");
     }
+  };
+
+  const handleEditCategory = async () => {
+    if (!editingCategoryId || !editCategoryName.trim()) return;
+    setCategoryError(null);
+    try {
+      const res = await fetch(`/api/categories/${editingCategoryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editCategoryName.trim(), color: editCategoryColor }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setCategories(categories.map((c) => (c.id === updated.id ? { ...c, name: updated.name, color: updated.color } : c)));
+        setEditingCategoryId(null);
+        setEditCategoryName("");
+        setEditCategoryColor("#6366f1");
+      } else {
+        const data = await res.json();
+        setCategoryError(data.error || "Failed to update category");
+      }
+    } catch (error) {
+      console.error("Failed to edit category:", error);
+      setCategoryError("Failed to update category");
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    setCategoryError(null);
+    try {
+      const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+
+      if (res.ok) {
+        setCategories(categories.filter((c) => c.id !== id));
+        setDeletingCategoryId(null);
+      } else {
+        const data = await res.json();
+        setCategoryError(data.error || "Failed to delete category");
+      }
+    } catch (error) {
+      console.error("Failed to delete category:", error);
+      setCategoryError("Failed to delete category");
+    }
+  };
+
+  const startEditCategory = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setEditCategoryName(cat.name);
+    setEditCategoryColor(cat.color || "#6366f1");
+    setCategoryError(null);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditCategoryName("");
+    setEditCategoryColor("#6366f1");
+    setCategoryError(null);
   };
 
   const handleCreateInlineCategory = async () => {
@@ -279,6 +348,7 @@ export default function TransactionsPage() {
     if (!name) return;
 
     setCreatingCategory(true);
+    setCategoryError(null);
     try {
       const res = await fetch("/api/categories", {
         method: "POST",
@@ -288,15 +358,19 @@ export default function TransactionsPage() {
 
       if (res.ok) {
         const cat = await res.json();
-        setCategories([...categories, cat]);
+        setCategories((prev) => prev.some((c) => c.id === cat.id) ? prev : [...prev, cat]);
         setFormData({ ...formData, categoryId: cat.id });
         setInlineCategoryName("");
         setShowInlineCategoryInput(false);
         setCategorySearch("");
         setShowCategoryDropdown(false);
+      } else {
+        const data = await res.json();
+        setCategoryError(data.error || "Failed to create category");
       }
     } catch (error) {
       console.error("Failed to create category:", error);
+      setCategoryError("Failed to create category");
     } finally {
       setCreatingCategory(false);
     }
@@ -559,29 +633,29 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Transactions</h1>
           <p className="text-muted-foreground">Manage your income and expenses</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setShowUploadModal(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import CSV
+            <Upload className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Import CSV</span>
           </Button>
           <Button variant="outline" onClick={handleRecategorize} disabled={recategorizing}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${recategorizing ? "animate-spin" : ""}`} />
-            {recategorizing ? "Categorizing..." : "Auto-Categorize"}
+            <RefreshCw className={`h-4 w-4 sm:mr-2 ${recategorizing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">{recategorizing ? "Categorizing..." : "Auto-Categorize"}</span>
           </Button>
           <Button variant="outline" onClick={() => setShowCategoryModal(true)}>
-            <Tag className="mr-2 h-4 w-4" />
-            Categories
+            <Tag className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Categories</span>
           </Button>
           <Button variant="outline" onClick={() => { setReviewSourceCategory("Miscellaneous"); setShowReviewModal(true); }}>
-            <Search className="mr-2 h-4 w-4" />
-            Review
+            <Search className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Review</span>
           </Button>
-          <Button onClick={() => setShowAddModal(true)}>
+          <Button onClick={() => setShowAddModal(true)} className="flex-1 sm:flex-none">
             <Plus className="mr-2 h-4 w-4" />
             Add Transaction
           </Button>
@@ -612,7 +686,7 @@ export default function TransactionsPage() {
       {selectedIds.size > 0 && (
         <Card variant="bordered" className="border-primary/50 bg-primary/5">
           <CardContent className="py-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">
                   {selectedIds.size} selected
@@ -621,15 +695,15 @@ export default function TransactionsPage() {
                   Clear
                 </Button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowBulkCategoryModal(true)}
                   disabled={bulkProcessing}
                 >
-                  <Tag className="mr-2 h-4 w-4" />
-                  Change Category
+                  <Tag className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Change Category</span>
                 </Button>
                 <Button
                   variant="destructive"
@@ -637,8 +711,8 @@ export default function TransactionsPage() {
                   onClick={handleBulkDelete}
                   disabled={bulkProcessing}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Selected
+                  <Trash2 className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Delete Selected</span>
                 </Button>
               </div>
             </div>
@@ -726,14 +800,15 @@ export default function TransactionsPage() {
                 {filteredTransactions.map((transaction) => (
                   <div
                     key={transaction.id}
-                    className={`flex items-center justify-between rounded-lg border p-4 hover:bg-accent/50 transition-colors ${
+                    className={`flex items-center justify-between gap-2 sm:gap-3 rounded-lg border p-3 sm:p-4 hover:bg-accent/50 transition-colors ${
                       selectedIds.has(transaction.id) ? "border-primary/50 bg-primary/5" : "border-border"
                     }`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                       <button
                         onClick={() => toggleSelect(transaction.id)}
-                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Toggle selection"
+                        className="p-1.5 sm:p-0 -ml-1.5 sm:ml-0 text-muted-foreground hover:text-foreground"
                       >
                         {selectedIds.has(transaction.id) ? (
                           <CheckSquare className="h-5 w-5 text-primary" />
@@ -742,7 +817,7 @@ export default function TransactionsPage() {
                         )}
                       </button>
                       <div
-                        className={`rounded-full p-2 ${
+                        className={`rounded-full p-2 shrink-0 ${
                           transaction.type === "income" ? "bg-success/10" : "bg-destructive/10"
                         }`}
                       >
@@ -752,21 +827,23 @@ export default function TransactionsPage() {
                           <ArrowDownRight className="h-4 w-4 text-destructive" />
                         )}
                       </div>
-                      <div>
-                        <p className="font-medium">{transaction.description || "Transaction"}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{transaction.description || "Transaction"}</p>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                           <div
-                            className="h-2 w-2 rounded-full"
+                            className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: transaction.category?.color || "#6b7280" }}
                           />
-                          {transaction.category?.name || "Uncategorized"} • {new Date(transaction.date).toLocaleDateString()}
-                          {transaction.paymentMethod && ` • ${transaction.paymentMethod}`}
+                          <span className="truncate">
+                            {transaction.category?.name || "Uncategorized"} • {new Date(transaction.date).toLocaleDateString()}
+                            {transaction.paymentMethod && ` • ${transaction.paymentMethod}`}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                       <p
-                        className={`font-semibold ${
+                        className={`font-semibold text-sm sm:text-base ${
                           transaction.type === "income" ? "text-success" : "text-destructive"
                         }`}
                       >
@@ -776,13 +853,15 @@ export default function TransactionsPage() {
                       <div className="flex gap-1">
                         <button
                           onClick={() => openEditModal(transaction)}
-                          className="rounded p-1 hover:bg-accent"
+                          aria-label="Edit transaction"
+                          className="rounded p-2 hover:bg-accent"
                         >
                           <Edit2 className="h-4 w-4 text-muted-foreground" />
                         </button>
                         <button
                           onClick={() => handleDeleteTransaction(transaction.id)}
-                          className="rounded p-1 hover:bg-destructive/10"
+                          aria-label="Delete transaction"
+                          className="rounded p-2 hover:bg-destructive/10"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </button>
@@ -797,8 +876,8 @@ export default function TransactionsPage() {
       </Card>
 
       {(showAddModal || editingTransaction) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">
                 {editingTransaction ? "Edit Transaction" : "Add Transaction"}
@@ -1064,8 +1143,8 @@ export default function TransactionsPage() {
       )}
 
       {showBulkCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Change Category</h2>
               <button
@@ -1211,8 +1290,8 @@ export default function TransactionsPage() {
       )}
 
       {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[80vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Manage Categories</h2>
               <button
@@ -1261,20 +1340,95 @@ export default function TransactionsPage() {
             </div>
 
             <div>
+              {categoryError && (
+                <div className="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {categoryError}
+                </div>
+              )}
+
               <h3 className="mb-3 text-sm font-medium">Expense Categories</h3>
               <div className="space-y-2 mb-4">
                 {categories.filter((c) => c.type === "expense").map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="flex items-center justify-between rounded-lg border border-border p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-4 w-4 rounded-full"
-                        style={{ backgroundColor: cat.color || "#6b7280" }}
-                      />
-                      <span className="text-sm">{cat.name}</span>
-                    </div>
+                  <div key={cat.id} className="rounded-lg border border-border p-3">
+                    {editingCategoryId === cat.id ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={editCategoryColor}
+                            onChange={(e) => setEditCategoryColor(e.target.value)}
+                            className="h-8 w-8 cursor-pointer rounded border border-border"
+                          />
+                          <input
+                            type="text"
+                            value={editCategoryName}
+                            onChange={(e) => setEditCategoryName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleEditCategory(); if (e.key === "Escape") cancelEditCategory(); }}
+                            className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleEditCategory}
+                            disabled={!editCategoryName.trim()}
+                            className="flex-1 rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditCategory}
+                            className="flex-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : deletingCategoryId === cat.id ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-destructive">Delete "{cat.name}"?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setDeletingCategoryId(null)}
+                            className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-4 w-4 rounded-full"
+                            style={{ backgroundColor: cat.color || "#6b7280" }}
+                          />
+                          <span className="text-sm">{cat.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => startEditCategory(cat)}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => { setDeletingCategoryId(cat.id); setCategoryError(null); }}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1282,17 +1436,86 @@ export default function TransactionsPage() {
               <h3 className="mb-3 text-sm font-medium">Income Categories</h3>
               <div className="space-y-2">
                 {categories.filter((c) => c.type === "income").map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="flex items-center justify-between rounded-lg border border-border p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-4 w-4 rounded-full"
-                        style={{ backgroundColor: cat.color || "#6b7280" }}
-                      />
-                      <span className="text-sm">{cat.name}</span>
-                    </div>
+                  <div key={cat.id} className="rounded-lg border border-border p-3">
+                    {editingCategoryId === cat.id ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={editCategoryColor}
+                            onChange={(e) => setEditCategoryColor(e.target.value)}
+                            className="h-8 w-8 cursor-pointer rounded border border-border"
+                          />
+                          <input
+                            type="text"
+                            value={editCategoryName}
+                            onChange={(e) => setEditCategoryName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleEditCategory(); if (e.key === "Escape") cancelEditCategory(); }}
+                            className="flex-1 rounded border border-border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleEditCategory}
+                            disabled={!editCategoryName.trim()}
+                            className="flex-1 rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditCategory}
+                            className="flex-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : deletingCategoryId === cat.id ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-destructive">Delete "{cat.name}"?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setDeletingCategoryId(null)}
+                            className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-4 w-4 rounded-full"
+                            style={{ backgroundColor: cat.color || "#6b7280" }}
+                          />
+                          <span className="text-sm">{cat.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => startEditCategory(cat)}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => { setDeletingCategoryId(cat.id); setCategoryError(null); }}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1310,8 +1533,8 @@ export default function TransactionsPage() {
       )}
 
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Import Bank Statement</h2>
               <button

@@ -236,15 +236,15 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg">
         {/* Progress */}
-        <div className="mb-8 flex gap-2">
+        <div className="mb-6 sm:mb-8 flex gap-2">
           {STEPS.map((_, i) => (
             <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? "bg-primary" : "bg-muted"}`} />
           ))}
         </div>
 
         {/* Step Content */}
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
-          <h1 className="text-2xl font-bold">{STEPS[step].title}</h1>
+        <div className="rounded-2xl border border-border bg-card p-4 sm:p-8 shadow-lg">
+          <h1 className="text-xl sm:text-2xl font-bold">{STEPS[step].title}</h1>
           <p className="mt-1 text-muted-foreground">{STEPS[step].subtitle}</p>
 
           <div className="mt-6 min-h-[320px]">
@@ -297,7 +297,7 @@ export default function OnboardingPage() {
 
                 <div className="rounded-lg border border-border p-4">
                   <p className="text-sm font-medium mb-3">Quick Select</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[
                       { label: "Rp 3.000.000", value: "3000000" },
                       { label: "Rp 5.000.000", value: "5000000" },
@@ -353,16 +353,16 @@ export default function OnboardingPage() {
 
                 {/* Summary Bar */}
                 <div className="rounded-lg border border-border p-3">
-                  <div className="flex justify-between text-sm mb-2">
+                  <div className="flex justify-between gap-2 text-sm mb-2">
                     <span className="text-muted-foreground">Budgeted</span>
-                    <span className="font-medium">{totalBudgetPct}% of income</span>
+                    <span className="font-medium shrink-0">{totalBudgetPct}% of income</span>
                   </div>
                   <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex">
                     <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min(totalBudgetPct, 100)}%` }} />
                   </div>
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>Rp {formatNumber(String(totalBudgetAmount))} budgeted</span>
-                    <span className="text-success">Rp {formatNumber(String(remainingAfterBudget))} remaining</span>
+                  <div className="flex justify-between gap-2 text-xs text-muted-foreground mt-1">
+                    <span className="min-w-0 truncate">Rp {formatNumber(String(totalBudgetAmount))} budgeted</span>
+                    <span className="text-success shrink-0">Rp {formatNumber(String(remainingAfterBudget))} remaining</span>
                   </div>
                 </div>
 
@@ -455,23 +455,23 @@ export default function OnboardingPage() {
                 {/* Goals List */}
                 <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
                   {savingsGoals.map((goal) => (
-                    <div key={goal.id} className="rounded-lg border border-border p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{goal.icon}</span>
+                    <div key={goal.id} className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-lg shrink-0">{goal.icon}</span>
                           <input
                             type="text"
                             value={goal.name}
                             onChange={(e) => updateGoal(goal.id, "name", e.target.value)}
                             placeholder="Goal name"
-                            className="font-medium text-sm bg-transparent border-none outline-none w-32"
+                            className="font-medium text-sm bg-transparent border-none outline-none w-full min-w-0"
                           />
                         </div>
-                        <button onClick={() => removeGoal(goal.id)} className="text-muted-foreground hover:text-destructive">
+                        <button onClick={() => removeGoal(goal.id)} aria-label="Remove goal" className="shrink-0 rounded p-2 text-muted-foreground hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs text-muted-foreground">Target Amount</label>
                           <div className="relative">
@@ -492,7 +492,7 @@ export default function OnboardingPage() {
                             type="date"
                             value={goal.deadline}
                             onChange={(e) => updateGoal(goal.id, "deadline", e.target.value)}
-                            className="w-full rounded border border-border bg-background py-1.5 px-2 text-sm focus:border-primary focus:outline-none"
+                            className="w-full rounded border border-border bg-background py-1.5 px-2 text-xs sm:text-sm focus:border-primary focus:outline-none"
                           />
                         </div>
                       </div>
@@ -531,19 +531,19 @@ export default function OnboardingPage() {
                         const cat = BUDGET_CATEGORIES.find(c => c.key === key);
                         if (!cat) return null;
                         return (
-                          <div key={key} className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-2">
+                          <div key={key} className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 min-w-0">
                               <span>{cat.emoji}</span>
-                              {cat.label}
+                              <span className="truncate">{cat.label}</span>
                             </span>
-                            <span className="font-medium">Rp {budget.amount}</span>
+                            <span className="font-medium shrink-0">Rp {budget.amount}</span>
                           </div>
                         );
                       })}
                       <div className="h-px bg-border my-2" />
-                      <div className="flex justify-between text-sm font-medium">
+                      <div className="flex justify-between gap-2 text-sm font-medium">
                         <span>Total Budgeted</span>
-                        <span>{totalBudgetPct}% = Rp {formatNumber(String(totalBudgetAmount))}</span>
+                        <span className="shrink-0 text-right">{totalBudgetPct}% = Rp {formatNumber(String(totalBudgetAmount))}</span>
                       </div>
                     </div>
                   ) : (
@@ -561,12 +561,12 @@ export default function OnboardingPage() {
                   {savingsGoals.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {savingsGoals.filter(g => g.name).map((goal) => (
-                        <div key={goal.id} className="flex justify-between text-sm">
-                          <span className="flex items-center gap-1">
+                        <div key={goal.id} className="flex justify-between gap-2 text-sm">
+                          <span className="flex items-center gap-1 min-w-0">
                             <span>{goal.icon}</span>
-                            {goal.name}
+                            <span className="truncate">{goal.name}</span>
                           </span>
-                          <span className="text-muted-foreground">Rp {goal.targetAmount}</span>
+                          <span className="text-muted-foreground shrink-0">Rp {goal.targetAmount}</span>
                         </div>
                       ))}
                     </div>
@@ -662,7 +662,8 @@ function BudgetCategoryCard({
         </div>
         <button
           onClick={onToggle}
-          className={`rounded-full p-1 ${
+          aria-label={budget.enabled ? "Disable budget" : "Enable budget"}
+          className={`shrink-0 rounded-full p-2 ${
             budget.enabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           }`}
         >
@@ -684,10 +685,10 @@ function BudgetCategoryCard({
           </div>
           <button
             onClick={onApplyRecommendation}
-            className="flex items-center gap-1 text-xs text-primary hover:underline"
+            className="flex items-center gap-1 text-xs text-primary hover:underline break-words"
           >
-            <Sparkles className="h-3 w-3" />
-            Recommended: Rp {formatNumber(String(roundedRecommended))}
+            <Sparkles className="h-3 w-3 shrink-0" />
+            <span>Recommended: Rp {formatNumber(String(roundedRecommended))}</span>
           </button>
         </div>
       )}

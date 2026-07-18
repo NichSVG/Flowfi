@@ -6,10 +6,11 @@ import { prisma } from "./prisma";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "./categories";
 
 const googleProvider = process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-  ? Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET, checks: ["state"] })
+  ? Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET, checks: [] })
   : null;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     ...(googleProvider ? [googleProvider] : []),
     Credentials({

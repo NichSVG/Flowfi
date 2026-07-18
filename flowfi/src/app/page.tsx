@@ -12,37 +12,37 @@ export default function HomePage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
             <span className="text-2xl font-bold text-primary-foreground">F</span>
           </div>
-          <h1 className="text-4xl font-bold">FlowFi</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold">FlowFi</h1>
         </div>
 
-        <p className="mb-12 text-xl text-muted-foreground">
+        <p className="mb-8 sm:mb-12 text-base sm:text-xl text-muted-foreground">
           Track expenses, manage budgets, and achieve your financial goals with ease.
         </p>
 
         {/* Features */}
-        <div className="mb-12 grid gap-6 sm:grid-cols-2">
-          <div className="rounded-xl border border-border p-6 text-left">
+        <div className="mb-10 sm:mb-12 grid gap-4 sm:gap-6 sm:grid-cols-2">
+          <div className="rounded-xl border border-border p-4 sm:p-6 text-left">
             <Wallet className="mb-3 h-8 w-8 text-primary" />
             <h3 className="mb-2 font-semibold">Track Expenses</h3>
             <p className="text-sm text-muted-foreground">
               Easily log and categorize your income and expenses
             </p>
           </div>
-          <div className="rounded-xl border border-border p-6 text-left">
+          <div className="rounded-xl border border-border p-4 sm:p-6 text-left">
             <PieChart className="mb-3 h-8 w-8 text-primary" />
             <h3 className="mb-2 font-semibold">Smart Analytics</h3>
             <p className="text-sm text-muted-foreground">
               Visualize spending patterns with beautiful charts
             </p>
           </div>
-          <div className="rounded-xl border border-border p-6 text-left">
+          <div className="rounded-xl border border-border p-4 sm:p-6 text-left">
             <Target className="mb-3 h-8 w-8 text-primary" />
             <h3 className="mb-2 font-semibold">Savings Goals</h3>
             <p className="text-sm text-muted-foreground">
               Set and track progress towards your financial goals
             </p>
           </div>
-          <div className="rounded-xl border border-border p-6 text-left">
+          <div className="rounded-xl border border-border p-4 sm:p-6 text-left">
             <Bell className="mb-3 h-8 w-8 text-primary" />
             <h3 className="mb-2 font-semibold">Budget Alerts</h3>
             <p className="text-sm text-muted-foreground">

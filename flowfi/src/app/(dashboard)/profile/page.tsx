@@ -153,15 +153,15 @@ export default function ProfilePage() {
             <CardTitle>Personal Information</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-6 flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary">
-                <span className="text-3xl font-bold text-primary-foreground">
+            <div className="mb-6 flex items-center gap-3 sm:gap-4">
+              <div className="flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center rounded-full bg-primary">
+                <span className="text-2xl sm:text-3xl font-bold text-primary-foreground">
                   {name ? name[0].toUpperCase() : "?"}
                 </span>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">{name || "User"}</h3>
-                <p className="text-muted-foreground">{email}</p>
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold truncate">{name || "User"}</h3>
+                <p className="text-muted-foreground truncate">{email}</p>
               </div>
             </div>
 
@@ -177,7 +177,7 @@ export default function ProfilePage() {
                 value={email}
                 disabled
               />
-              <Button onClick={handleSaveProfile} loading={saving}>
+              <Button onClick={handleSaveProfile} loading={saving} className="w-full sm:w-auto">
                 <Save className="mr-2 h-4 w-4" />
                 Save Changes
               </Button>
@@ -263,7 +263,7 @@ export default function ProfilePage() {
           <CardContent>
             <div className="space-y-4">
               <div className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     {theme === "dark" ? (
                       <Moon className="h-5 w-5 text-muted-foreground" />
@@ -277,10 +277,10 @@ export default function ProfilePage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex rounded-lg border border-border">
+                  <div className="flex rounded-lg border border-border self-start sm:self-auto">
                     <button
                       onClick={() => setTheme("light")}
-                      className={`px-3 py-1.5 text-sm ${
+                      className={`px-4 py-2 text-sm ${
                         theme === "light" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                       }`}
                     >
@@ -288,7 +288,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={() => setTheme("dark")}
-                      className={`px-3 py-1.5 text-sm ${
+                      className={`px-4 py-2 text-sm ${
                         theme === "dark" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                       }`}
                     >
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={() => setTheme("system")}
-                      className={`px-3 py-1.5 text-sm ${
+                      className={`px-4 py-2 text-sm ${
                         theme === "system" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                       }`}
                     >
@@ -315,7 +315,7 @@ export default function ProfilePage() {
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-medium">Delete Account</p>
               <p className="text-sm text-muted-foreground">
@@ -326,6 +326,7 @@ export default function ProfilePage() {
               variant="destructive"
               size="sm"
               onClick={() => setShowDeleteConfirm(true)}
+              className="w-full sm:w-auto"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Account
@@ -335,8 +336,8 @@ export default function ProfilePage() {
       </Card>
 
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-destructive mb-2">
               Delete Account
             </h2>
@@ -367,8 +368,8 @@ export default function ProfilePage() {
       )}
 
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-card p-4 sm:p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-2">Change Password</h2>
             <p className="text-sm text-muted-foreground mb-6">
               Enter your current password and a new password.

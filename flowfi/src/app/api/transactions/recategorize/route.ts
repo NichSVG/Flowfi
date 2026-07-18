@@ -84,26 +84,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Create missing subcategories if they don't exist
-    const financialParent = allCategories.find(c => c.name === "Financial" && (c.userId === userId || c.isDefault));
-    const missingSubcats = ["E-Wallet", "Bank Fees"];
-    for (const subcatName of missingSubcats) {
-      const exists = allCategories.some(c => c.name === subcatName && (c.userId === userId || c.isDefault));
-      if (!exists && financialParent) {
-        const newCat = await prisma.category.create({
-          data: {
-            name: subcatName,
-            type: "expense",
-            userId,
-            parentId: financialParent.id,
-            isDefault: false,
-            color: financialParent.color,
-          },
-        });
-        allCategories.push(newCat);
-      }
-    }
-
     const categoryMap = new Map<string, string>();
     for (const cat of allCategories) {
       categoryMap.set(cat.name, cat.id);

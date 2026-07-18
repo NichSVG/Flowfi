@@ -129,30 +129,79 @@ export async function GET(req: Request) {
       orderBy: { date: "desc" },
     });
 
-    const categorySpending = spendingByCategory
-      .sort((a, b) => Number(b._sum.amount) - Number(a._sum.amount))
-      .map((item, index) => {
+    // Build raw per-categoryId slices, then merge duplicates that share the
+    // same category name (case-insensitive). This is the root-cause fix for
+    // "moving a transaction to Entertainment creates a second Entertainment
+    // slice": multiple Category rows can exist with the same name but
+    // different IDs (e.g. a user-scoped one + a global isDefault one), and
+    // without this merge the pie chart splits them into separate slices.
+    const rawSlices = spendingByCategory.map((item) => {
       const category = categories.find((c) => c.id === item.categoryId);
       const catId = item.categoryId;
-      const catTransactions = allMonthTransactions
-        .filter((t) => t.categoryId === catId)
-        .slice(0, 20)
-        .map((t) => ({
-          id: t.id,
-          amount: Number(t.amount),
-          description: t.description,
-          date: t.date,
-          paymentMethod: t.paymentMethod,
-        }));
+      const allCatTransactions = allMonthTransactions.filter((t) => t.categoryId === catId);
+      const catTransactions = allCatTransactions.slice(0, 20).map((t) => ({
+        id: t.id,
+        amount: Number(t.amount),
+        description: t.description,
+        date: t.date,
+        paymentMethod: t.paymentMethod,
+      }));
       return {
         name: category?.name || "Unknown",
+        normalizedName: (category?.name || "Unknown").toLowerCase().trim(),
         value: Number(item._sum.amount) || 0,
-        color: CHART_COLORS[index % CHART_COLORS.length],
         categoryId: catId,
-        transactionCount: catTransactions.length,
+        transactionCount: allCatTransactions.length,
         transactions: catTransactions,
+        category,
       };
     });
+
+    // Merge slices that share the same normalized name. Prefer the
+    // user-owned category (userId != null) as the canonical categoryId so
+    // future recategorizations land in the same bucket the user sees.
+    const mergedByName = new Map<string, typeof rawSlices[number]>();
+    for (const slice of rawSlices) {
+      const existing = mergedByName.get(slice.normalizedName);
+      if (!existing) {
+        mergedByName.set(slice.normalizedName, slice);
+        continue;
+      }
+      // User-owned category wins as the canonical ID; otherwise keep the
+      // one we already had (deterministic by groupBy order).
+      const sliceIsUserOwned = slice.category?.userId != null;
+      const existingIsUserOwned = existing.category?.userId != null;
+      if (sliceIsUserOwned && !existingIsUserOwned) {
+        mergedByName.set(slice.normalizedName, {
+          ...slice,
+          value: slice.value + existing.value,
+          transactionCount: slice.transactionCount + existing.transactionCount,
+          transactions: [...slice.transactions, ...existing.transactions]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 20),
+        });
+      } else {
+        mergedByName.set(slice.normalizedName, {
+          ...existing,
+          value: existing.value + slice.value,
+          transactionCount: existing.transactionCount + slice.transactionCount,
+          transactions: [...existing.transactions, ...slice.transactions]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 20),
+        });
+      }
+    }
+
+    const categorySpending = Array.from(mergedByName.values())
+      .sort((a, b) => b.value - a.value)
+      .map((slice, index) => ({
+        name: slice.name,
+        value: slice.value,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+        categoryId: slice.categoryId,
+        transactionCount: slice.transactionCount,
+        transactions: slice.transactions,
+      }));
 
     // Get recent transactions for the month
     const recentTransactions = await prisma.transaction.findMany({

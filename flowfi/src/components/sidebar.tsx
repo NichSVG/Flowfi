@@ -39,7 +39,8 @@ export function Sidebar() {
       {/* Mobile menu button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="fixed top-4 left-4 z-50 rounded-lg bg-card p-2 shadow-md border border-border lg:hidden"
+        aria-label="Open menu"
+        className="fixed top-3 left-3 z-50 rounded-lg bg-card p-2.5 shadow-md border border-border lg:hidden"
       >
         {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
